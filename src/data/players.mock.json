@@ -1,0 +1,42 @@
+[
+  {
+    "id": "p1",
+    "name": "Cristiano Ronaldo",
+    "role": "Forward",
+    "rating": 91,
+    "image": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400&h=400&fit=crop",
+    "basePrice": 100
+  },
+  {
+    "id": "p2",
+    "name": "Kevin De Bruyne",
+    "role": "Midfielder",
+    "rating": 90,
+    "image": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=400&h=400&fit=crop",
+    "basePrice": 100
+  },
+  {
+    "id": "p3",
+    "name": "Virgil van Dijk",
+    "role": "Defender",
+    "rating": 89,
+    "image": "https://images.unsplash.com/photo-1606925797300-0b35e9d1794e?w=400&h=400&fit=crop",
+    "basePrice": 100
+  },
+  {
+    "id": "p4",
+    "name": "Alisson Becker",
+    "role": "Goalkeeper",
+    "rating": 88,
+    "image": "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=400&h=400&fit=crop",
+    "basePrice": 100
+  },
+  {
+    "id": "p5",
+    "name": "Erling Haaland",
+    "role": "Forward",
+    "rating": 92,
+    "image": "https://images.unsplash.com/photo-1614632537197-38a17061c2bd?w=400&h=400&fit=crop",
+    "basePrice": 100
+  }
+]
