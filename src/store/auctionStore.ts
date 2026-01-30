@@ -9,8 +9,7 @@ const AUCTION_DURATION = 30;
 const RESULT_DISPLAY_DURATION = 3;
 
 export const useAuctionStore = create<AuctionState>((set, get) => ({
-  // Initial state
-  users: AuctionEngine.initializeUsers(),
+  users: [],
   currentUserId: null,
   allPlayers: [],
   currentPlayerIndex: -1,
@@ -24,24 +23,32 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
   bidHistory: [],
   resultMessage: null,
 
-  // Select user (login)
   selectUser: (userId: string) => {
     set({ currentUserId: userId });
   },
 
-  // Start auction
   startAuction: async () => {
     const state = get();
     
-    // Load players if not loaded
     let players = state.allPlayers;
+    let users = state.users;
+
     if (players.length === 0) {
       players = await AuctionEngine.loadPlayers();
-      set({ allPlayers: players });
     }
 
-    // Reset state for new auction
+    if (users.length === 0) {
+      users = await AuctionEngine.loadUsers();
+    }
+
+    if (players.length === 0 || users.length === 0) {
+      console.error('Failed to load data from Supabase');
+      return;
+    }
+
     set({
+      users,
+      allPlayers: players,
       currentPlayerIndex: 0,
       currentPlayer: players[0],
       soldPlayers: [],
@@ -54,11 +61,9 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
       resultMessage: null,
     });
 
-    // Start countdown
     startCountdown();
   },
 
-  // Pause auction
   pauseAuction: () => {
     const state = get();
     if (state.status === 'active') {
@@ -67,7 +72,6 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
     }
   },
 
-  // Resume auction
   resumeAuction: () => {
     const state = get();
     if (state.status === 'paused') {
@@ -76,12 +80,10 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
     }
   },
 
-  // Place bid
-  placeBid: (amount: number): boolean => {
+  placeBid: async (amount: number): Promise<boolean> => {
     const state = get();
     const user = state.users.find((u) => u.id === state.currentUserId);
 
-    // Validate bid
     const validation = AuctionEngine.canPlaceBid(
       user,
       amount,
@@ -94,7 +96,6 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
       return false;
     }
 
-    // Process bid
     const { bid, newTimeRemaining } = AuctionEngine.processBid(
       user!.id,
       user!.username,
@@ -102,7 +103,17 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
       state.timeRemaining
     );
 
-    // Update state
+    const saved = await AuctionEngine.saveBid(
+      state.currentPlayer!.id,
+      user!.id,
+      amount
+    );
+
+    if (!saved) {
+      console.error('Failed to save bid to Supabase');
+      return false;
+    }
+
     set({
       currentHighestBid: bid,
       bidHistory: [...state.bidHistory, bid],
@@ -112,50 +123,50 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
     return true;
   },
 
-  // Tick (called every second)
   tick: () => {
     const state = get();
 
-    // Handle countdown
     if (state.status === 'countdown') {
       if (state.countdown > 0) {
         set({ countdown: state.countdown - 1 });
       } else {
-        // Countdown finished, start auction
         auctionEngine.startTimer(() => get().tick());
         set({ status: 'active' });
       }
       return;
     }
 
-    // Handle active auction
     if (state.status === 'active') {
       if (state.timeRemaining > 0) {
         set({ timeRemaining: state.timeRemaining - 1 });
       } else {
-        // Time's up - end auction
         endCurrentAuction();
       }
       return;
     }
 
-    // Handle result display
     if (state.status === 'result') {
       if (state.countdown > 0) {
         set({ countdown: state.countdown - 1 });
       } else {
-        // Result display finished, load next player
         loadNextPlayer();
       }
       return;
     }
   },
 
-  // Reset auction
-  reset: () => {
+  reset: async () => {
     auctionEngine.stopTimer();
+    
+    const resetSuccess = await AuctionEngine.resetAuction();
+    if (!resetSuccess) {
+      console.error('Failed to reset auction in Supabase');
+    }
+
+    const users = await AuctionEngine.loadUsers();
+
     set({
-      users: AuctionEngine.initializeUsers(),
+      users,
       currentUserId: null,
       allPlayers: [],
       currentPlayerIndex: -1,
@@ -172,7 +183,6 @@ export const useAuctionStore = create<AuctionState>((set, get) => ({
   },
 }));
 
-// Helper: Start countdown
 function startCountdown() {
   const countdownInterval = setInterval(() => {
     const state = useAuctionStore.getState();
@@ -184,34 +194,38 @@ function startCountdown() {
   }, 1000);
 }
 
-// Helper: End current auction
-function endCurrentAuction() {
+async function endCurrentAuction() {
   const state = useAuctionStore.getState();
   auctionEngine.stopTimer();
 
   const winner = state.currentHighestBid;
   const player = state.currentPlayer!;
 
-  // Generate result message
   const resultMessage = AuctionEngine.generateResultMessage(player, winner);
 
-  // Update users and tracking
   let updatedUsers = state.users;
   let updatedSoldPlayers = state.soldPlayers;
   let updatedUnsoldPlayers = state.unsoldrPlayers;
 
   if (winner) {
-    // Deduct balance from winner and add player to their won list
     updatedUsers = AuctionEngine.deductBalanceAndAddPlayer(
       state.users,
       winner.userId,
       winner.amount,
       player
     );
-    // Mark player as sold
+
+    const balanceUpdateSuccess = await AuctionEngine.updateUserBalance(
+      winner.userId,
+      updatedUsers.find((u) => u.id === winner.userId)!.balance
+    );
+
+    if (!balanceUpdateSuccess) {
+      console.error('Failed to update user balance in Supabase');
+    }
+
     updatedSoldPlayers = [...state.soldPlayers, player.id];
   } else {
-    // No bids - mark as unsold for re-auction
     updatedUnsoldPlayers = [...state.unsoldrPlayers, player.id];
   }
 
@@ -224,11 +238,9 @@ function endCurrentAuction() {
     resultMessage,
   });
 
-  // Start result countdown
   startResultCountdown();
 }
 
-// Helper: Start result countdown
 function startResultCountdown() {
   const resultInterval = setInterval(() => {
     const state = useAuctionStore.getState();
@@ -240,11 +252,9 @@ function startResultCountdown() {
   }, 1000);
 }
 
-// Helper: Load next player
 function loadNextPlayer() {
   const state = useAuctionStore.getState();
 
-  // Get next player index
   const { nextIndex, isFinished } = AuctionEngine.getNextPlayerIndex(
     state.currentPlayerIndex,
     state.allPlayers,
@@ -253,7 +263,6 @@ function loadNextPlayer() {
   );
 
   if (isFinished) {
-    // Auction finished
     auctionEngine.stopTimer();
     useAuctionStore.setState({
       status: 'finished',
@@ -262,11 +271,9 @@ function loadNextPlayer() {
     return;
   }
 
-  // Remove player from unsold list if it was there
   const nextPlayer = state.allPlayers[nextIndex];
   const updatedUnsoldPlayers = state.unsoldrPlayers.filter((id) => id !== nextPlayer.id);
 
-  // Load next player
   useAuctionStore.setState({
     currentPlayerIndex: nextIndex,
     currentPlayer: nextPlayer,
@@ -279,6 +286,5 @@ function loadNextPlayer() {
     resultMessage: null,
   });
 
-  // Start countdown for next player
   startCountdown();
 }

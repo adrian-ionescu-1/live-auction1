@@ -2,13 +2,50 @@
 
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
+import { AuctionEngine } from '@/services/auctionEngine';
 
 export default function UserSelector() {
   const { users, currentUserId, selectUser } = useAuctionStore();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (users.length === 0) {
+        const loadedUsers = await AuctionEngine.loadUsers();
+        useAuctionStore.setState({ users: loadedUsers });
+      }
+      setLoading(false);
+    };
+
+    loadUsers();
+  }, [users.length]);
 
   if (currentUserId) {
     return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Loading...</h1>
+          <p className="text-gray-600">Fetching users from database</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-center">
+          <h1 className="text-4xl font-bold text-red-600 mb-4">Error</h1>
+          <p className="text-gray-600">No users found in database</p>
+        </div>
+      </div>
+    );
   }
 
   return (

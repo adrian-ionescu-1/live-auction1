@@ -58,10 +58,10 @@ export interface AuctionState {
   
   // Actions
   selectUser: (userId: string) => void;
-  startAuction: () => void;
+  startAuction: () => Promise<void>;
   pauseAuction: () => void;
   resumeAuction: () => void;
-  placeBid: (amount: number) => boolean;
+  placeBid: (amount: number) => Promise<boolean>;
   tick: () => void;
-  reset: () => void;
+  reset: () => Promise<void>;
 }
