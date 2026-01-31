@@ -1,5 +1,3 @@
-// src/lib/supabase.ts
-
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -31,4 +29,15 @@ export interface SupabaseBid {
   user_id: string
   amount: number
   created_at: string
+}
+
+export interface SupabaseAuctionState {
+  id: string
+  status: string
+  current_player_id: string | null
+  current_player_index: number
+  time_remaining: number
+  countdown: number
+  current_highest_bid_id: string | null
+  updated_at: string
 }
