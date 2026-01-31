@@ -4,26 +4,39 @@
 
 import { useAuctionStore } from '@/store/auctionStore';
 
-export default function ResultsView() {
-  const { users, currentUserRole, reset } = useAuctionStore();
+interface ResultsViewProps {
+  onClose: () => void;
+}
+
+export default function ResultsView({ onClose }: ResultsViewProps) {
+  const { users } = useAuctionStore();
 
   const regularUsers = users.filter((u) => u.role === 'USER');
 
-  const handleStartNewAuction = async () => {
-    await reset();
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-12">
-          <h1 className="text-6xl font-bold text-gray-900 mb-4">🎉 Auction Complete! 🎉</h1>
-          <p className="text-2xl text-gray-600">All players have been auctioned</p>
-        </div>
+    /* fixed overlay — same z / backdrop pattern used by ResultBanner & ConfirmDialog */
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">Final Results</h2>
+        {/* ❌ close button — top-right corner */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 text-xl font-bold transition z-10"
+          aria-label="Close"
+        >
+          ❌
+        </button>
 
+        <div className="p-8">
+          {/* header */}
+          <div className="text-center mb-8">
+            <h1 className="text-5xl font-bold text-gray-900 mb-2">🎉 Auction Complete! 🎉</h1>
+            <p className="text-xl text-gray-600">All players have been auctioned</p>
+          </div>
+
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Final Results</h2>
+
+          {/* user cards grid — identical content as before */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {regularUsers
               .sort((a, b) => {
@@ -80,16 +93,10 @@ export default function ResultsView() {
               })}
           </div>
 
-          {currentUserRole === 'ADMIN' && (
-            <div className="mt-12 text-center">
-              <button
-                onClick={handleStartNewAuction}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg transition shadow-lg text-lg"
-              >
-                Start New Auction
-              </button>
-            </div>
-          )}
+          {/* bottom hint */}
+          <p className="text-center text-gray-500 mt-8 text-sm">
+            Waiting for the admin to start a new auction…
+          </p>
         </div>
       </div>
     </div>
