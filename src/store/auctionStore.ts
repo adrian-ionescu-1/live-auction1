@@ -178,13 +178,18 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             bidHistory,
           });
 
-          if (newState.status === 'countdown' || newState.status === 'active' || newState.status === 'result') {
+          // 🔥 CRITICAL FIX: Only start timer for admin users
+          const currentUser = state.users.find(u => u.id === state.currentUserId);
+          const isAdmin = currentUser?.isAdmin || false;
+
+          if (isAdmin && (newState.status === 'countdown' || newState.status === 'active' || newState.status === 'result')) {
             if (!timerInterval) {
               timerInterval = setInterval(() => {
                 get().tick();
               }, 1000);
             }
           } else {
+            // Non-admin users never run the timer
             if (timerInterval) {
               clearInterval(timerInterval);
               timerInterval = null;
@@ -231,21 +236,25 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
               timeRemaining: newTimeRemaining,
             });
 
-            const { data: auctionStateData } = await supabase
-              .from('auction_state')
-              .select('*')
-              .limit(1)
-              .single();
-
-            if (auctionStateData) {
-              await supabase
+            // 🔥 CRITICAL FIX: Only admin updates the auction state time
+            const currentUser = state.users.find(u => u.id === state.currentUserId);
+            if (currentUser?.isAdmin) {
+              const { data: auctionStateData } = await supabase
                 .from('auction_state')
-                .update({
-                  current_highest_bid_id: newBid.id,
-                  time_remaining: newTimeRemaining,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', auctionStateData.id);
+                .select('*')
+                .limit(1)
+                .single();
+
+              if (auctionStateData) {
+                await supabase
+                  .from('auction_state')
+                  .update({
+                    current_highest_bid_id: newBid.id,
+                    time_remaining: newTimeRemaining,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', auctionStateData.id);
+              }
             }
           }
         }
@@ -413,9 +422,20 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   tick: async () => {
+    // 🔥 CRITICAL FIX: Double-check admin status before processing
+    const state = get();
+    const currentUser = state.users.find(u => u.id === state.currentUserId);
+    if (!currentUser?.isAdmin) {
+      // Non-admin should never execute tick logic
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+      return;
+    }
+
     if (isProcessingTransition) return;
     
-    const state = get();
     const { data: auctionStateData } = await supabase
       .from('auction_state')
       .select('*')
