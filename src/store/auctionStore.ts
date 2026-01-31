@@ -113,29 +113,161 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   /**
+   * Initialize realtime subscriptions
+   */
+  initializeRealtime: () => {
+    const state = get();
+
+    // Auction state changes
+    auctionStateChannel = supabase
+      .channel('auction-state-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_state' }, async (payload: any) => {
+        const newState = payload.new;
+        if (!newState) return;
+
+        const currentState = get();
+        let currentPlayer: Player | null = null;
+
+        if (newState.current_player_id) {
+          currentPlayer = currentState.allPlayers.find((p: Player) => p.id === newState.current_player_id) || null;
+        }
+
+        const soldPlayers = Array.isArray(newState.sold_players) ? newState.sold_players : [];
+        const unsoldrPlayers = Array.isArray(newState.unsold_players) ? newState.unsold_players : [];
+
+        set({
+          status: newState.status as AuctionStatus,
+          currentPlayerIndex: newState.current_player_index,
+          currentPlayer,
+          countdown: newState.countdown,
+          timeRemaining: newState.time_remaining,
+          currentRound: newState.current_round,
+          roundTotalPlayers: newState.round_total_players,
+          roundCurrentIndex: newState.round_current_index,
+          soldPlayers,
+          unsoldrPlayers,
+        });
+
+        // Manage timer based on status
+        if (newState.status === 'countdown' || newState.status === 'active' || newState.status === 'result') {
+          if (!timerInterval) {
+            timerInterval = setInterval(() => {
+              get().tick();
+            }, 1000);
+          }
+        } else if (newState.status === 'idle' || newState.status === 'paused' || newState.status === 'finished') {
+          if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+          }
+        }
+
+        // Clear bids when player changes
+        if (newState.current_player_id && newState.current_player_id !== currentState.currentPlayer?.id) {
+          set({ bidHistory: [], currentHighestBid: null });
+        }
+      })
+      .subscribe();
+
+    // Bid changes
+    bidsChannel = supabase
+      .channel('bids-changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids' }, async (payload: any) => {
+        const newBid = payload.new;
+        const state = get();
+
+        if (!state.currentPlayer || newBid.player_id !== state.currentPlayer.id) {
+          return;
+        }
+
+        const user = state.users.find((u: User) => u.id === newBid.user_id);
+        if (!user) return;
+
+        const bid: Bid = {
+          userId: newBid.user_id,
+          username: user.username,
+          amount: newBid.amount,
+          timestamp: new Date(newBid.created_at).getTime(),
+        };
+
+        const existingBid = state.bidHistory.find(
+          (b: Bid) => b.userId === bid.userId && b.amount === bid.amount && Math.abs(b.timestamp - bid.timestamp) < 1000
+        );
+
+        if (!existingBid) {
+          const newTimeRemaining = AUCTION_DURATION;
+
+          set({
+            bidHistory: [...state.bidHistory, bid],
+            timeRemaining: newTimeRemaining,
+          });
+
+          // Update auction state with new time
+          await AuctionEngine.updateAuctionState({
+            current_highest_bid_id: newBid.id,
+            time_remaining: newTimeRemaining,
+          });
+        }
+      })
+      .subscribe();
+
+    // Subscribe to user updates (balance changes)
+    usersChannel = supabase
+      .channel('users-changes')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, async () => {
+        const users = await AuctionEngine.loadUsers();
+        set({ users });
+      })
+      .subscribe();
+  },
+
+  /**
+   * Cleanup realtime subscriptions
+   */
+  cleanupRealtime: () => {
+    if (auctionStateChannel) {
+      supabase.removeChannel(auctionStateChannel);
+      auctionStateChannel = null;
+    }
+    if (bidsChannel) {
+      supabase.removeChannel(bidsChannel);
+      bidsChannel = null;
+    }
+    if (usersChannel) {
+      supabase.removeChannel(usersChannel);
+      usersChannel = null;
+    }
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+  },
+
+  /**
    * Start auction (admin only)
    */
   startAuction: async () => {
-    const state = get();
-    if (state.currentUserRole !== 'ADMIN') {
-      console.error('Only admin can start auction');
-      return;
-    }
-
+    const users = await AuctionEngine.loadUsers();
     const players = await AuctionEngine.loadPlayers();
+
     if (players.length === 0) {
-      console.error('No players available for auction');
+      console.error('No players found to auction');
       return;
     }
 
     set({
+      users,
       allPlayers: players,
       currentPlayerIndex: 0,
       currentPlayer: players[0],
       countdown: COUNTDOWN_DURATION,
+      soldPlayers: [],
+      unsoldrPlayers: [],
       currentRound: 1,
       roundTotalPlayers: players.length,
       roundCurrentIndex: 1,
+      bidHistory: [],
+      currentHighestBid: null,
     });
 
     await AuctionEngine.updateAuctionState({
@@ -143,9 +275,12 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       current_player_id: players[0].id,
       current_player_index: 0,
       countdown: COUNTDOWN_DURATION,
+      time_remaining: AUCTION_DURATION,
       current_round: 1,
       round_total_players: players.length,
       round_current_index: 1,
+      sold_players: [],
+      unsold_players: [],
     });
   },
 
@@ -153,12 +288,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
    * Pause auction (admin only)
    */
   pauseAuction: async () => {
-    const state = get();
-    if (state.currentUserRole !== 'ADMIN') {
-      console.error('Only admin can pause auction');
-      return;
-    }
-
     await AuctionEngine.updateAuctionState({ status: 'paused' });
   },
 
@@ -166,17 +295,11 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
    * Resume auction (admin only)
    */
   resumeAuction: async () => {
-    const state = get();
-    if (state.currentUserRole !== 'ADMIN') {
-      console.error('Only admin can resume auction');
-      return;
-    }
-
     await AuctionEngine.updateAuctionState({ status: 'active' });
   },
 
   /**
-   * Place a bid (users only)
+   * Place a bid
    */
   placeBid: async (amount: number): Promise<boolean> => {
     const state = get();
@@ -225,172 +348,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       return false;
     }
 
-    const newBid: Bid = {
-      userId: currentUser.id,
-      username: currentUser.username,
-      amount,
-      timestamp: Date.now(),
-    };
-
-    set({
-      currentHighestBid: newBid,
-      bidHistory: [...state.bidHistory, newBid],
-    });
-
-    await AuctionEngine.updateAuctionState({
-      current_highest_bid_id: bidId,
-      time_remaining: AUCTION_DURATION,
-    });
-
     return true;
-  },
-
-  /**
-   * Initialize realtime subscriptions
-   */
-  initializeRealtime: () => {
-    const state = get();
-
-    // Auction State Channel
-    auctionStateChannel = supabase
-      .channel('auction_state_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'auction_state',
-        },
-        async (payload: any) => {
-          const newState = payload.new;
-          if (!newState) return;
-
-          const currentState = get();
-          let currentPlayer: Player | null = null;
-
-          if (newState.current_player_id) {
-            currentPlayer = currentState.allPlayers.find((p: Player) => p.id === newState.current_player_id) || null;
-          }
-
-          const soldPlayers = Array.isArray(newState.sold_players) ? newState.sold_players : [];
-          const unsoldrPlayers = Array.isArray(newState.unsold_players) ? newState.unsold_players : [];
-
-          set({
-            status: newState.status as AuctionStatus,
-            currentPlayerIndex: newState.current_player_index,
-            currentPlayer,
-            countdown: newState.countdown,
-            timeRemaining: newState.time_remaining,
-            currentRound: newState.current_round,
-            roundTotalPlayers: newState.round_total_players,
-            roundCurrentIndex: newState.round_current_index,
-            soldPlayers,
-            unsoldrPlayers,
-          });
-
-          if (newState.status === 'countdown' || newState.status === 'active' || newState.status === 'result') {
-            if (!timerInterval) {
-              timerInterval = setInterval(() => {
-                get().tick();
-              }, 1000);
-            }
-          } else if (newState.status === 'idle' || newState.status === 'paused' || newState.status === 'finished') {
-            if (timerInterval) {
-              clearInterval(timerInterval);
-              timerInterval = null;
-            }
-          }
-
-          if (newState.current_player_id && newState.current_player_id !== currentState.currentPlayer?.id) {
-            set({ bidHistory: [], currentHighestBid: null });
-          }
-        }
-      )
-      .subscribe();
-
-    // Bids Channel
-    bidsChannel = supabase
-      .channel('bids_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'bids',
-        },
-        async (payload: any) => {
-          const newBid = payload.new;
-          const currentState = get();
-
-          if (!currentState.currentPlayer || newBid.player_id !== currentState.currentPlayer.id) {
-            return;
-          }
-
-          const user = currentState.users.find((u: User) => u.id === newBid.user_id);
-          if (!user) return;
-
-          const bid: Bid = {
-            userId: newBid.user_id,
-            username: user.username,
-            amount: newBid.amount,
-            timestamp: new Date(newBid.created_at).getTime(),
-          };
-
-          const existingBid = currentState.bidHistory.find(
-            (b: Bid) => b.userId === bid.userId && b.amount === bid.amount && Math.abs(b.timestamp - bid.timestamp) < 1000
-          );
-
-          if (!existingBid) {
-            set({
-              bidHistory: [...currentState.bidHistory, bid],
-            });
-
-            if (!currentState.currentHighestBid || bid.amount > currentState.currentHighestBid.amount) {
-              set({ currentHighestBid: bid });
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    // Users Channel
-    usersChannel = supabase
-      .channel('users_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'users',
-        },
-        async () => {
-          const users = await AuctionEngine.loadUsers();
-          set({ users });
-        }
-      )
-      .subscribe();
-  },
-
-  /**
-   * Cleanup realtime subscriptions
-   */
-  cleanupRealtime: () => {
-    if (auctionStateChannel) {
-      supabase.removeChannel(auctionStateChannel);
-      auctionStateChannel = null;
-    }
-    if (bidsChannel) {
-      supabase.removeChannel(bidsChannel);
-      bidsChannel = null;
-    }
-    if (usersChannel) {
-      supabase.removeChannel(usersChannel);
-      usersChannel = null;
-    }
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-    }
   },
 
   /**
