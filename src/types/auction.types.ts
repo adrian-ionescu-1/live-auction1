@@ -44,4 +44,9 @@ export interface AuctionState {
   currentHighestBid: Bid | null;
   bidHistory: Bid[];
   resultMessage: string | null;
+  
+  // Round-based progress tracking
+  currentRound: number;
+  roundTotalPlayers: number;
+  roundCurrentIndex: number;
 }

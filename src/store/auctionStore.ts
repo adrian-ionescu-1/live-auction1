@@ -11,7 +11,9 @@ const RESULT_DISPLAY_DURATION = 3;
 
 let auctionStateChannel: RealtimeChannel | null = null;
 let bidsChannel: RealtimeChannel | null = null;
+let usersChannel: RealtimeChannel | null = null;
 let timerInterval: NodeJS.Timeout | null = null;
+let isProcessingTransition = false;
 
 interface AuctionStoreState extends AuctionState {
   selectUser: (userId: string) => void;
@@ -32,20 +34,29 @@ async function loadUsersWithWonPlayers(): Promise<User[]> {
   const { data: bidsData } = await supabase
     .from('bids')
     .select('*, players(id, name)')
-    .order('amount', { ascending: false });
+    .order('created_at', { ascending: true });
 
   const { data: playersData } = await supabase.from('players').select('*');
 
   const winningBidsByPlayer: Record<string, { user_id: string; amount: number; player_name: string }> = {};
 
-  if (bidsData) {
+  if (bidsData && playersData) {
+    const playerIds = new Set<string>();
+    
     for (const bid of bidsData) {
-      if (!winningBidsByPlayer[bid.player_id]) {
+      if (!playerIds.has(bid.player_id)) {
+        const allBidsForPlayer = bidsData.filter(b => b.player_id === bid.player_id);
+        const highestBid = allBidsForPlayer.reduce((max, current) => 
+          current.amount > max.amount ? current : max
+        );
+        
         winningBidsByPlayer[bid.player_id] = {
-          user_id: bid.user_id,
-          amount: bid.amount,
-          player_name: (bid.players as any)?.name || 'Unknown Player',
+          user_id: highestBid.user_id,
+          amount: highestBid.amount,
+          player_name: (highestBid.players as any)?.name || 'Unknown Player',
         };
+        
+        playerIds.add(bid.player_id);
       }
     }
   }
@@ -88,12 +99,13 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   currentHighestBid: null,
   bidHistory: [],
   resultMessage: null,
+  currentRound: 1,
+  roundTotalPlayers: 0,
+  roundCurrentIndex: 0,
 
   initializeRealtime: () => {
-    // Cleanup existing subscriptions
     get().cleanupRealtime();
 
-    // Subscribe to auction_state changes
     auctionStateChannel = supabase
       .channel('auction-state-changes')
       .on(
@@ -132,21 +144,28 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
           }
 
           let currentHighestBid: Bid | null = null;
-          if (newState.current_highest_bid_id) {
-            const { data: bidData } = await supabase
+          let bidHistory: Bid[] = state.bidHistory;
+          
+          if (newState.current_highest_bid_id && currentPlayer) {
+            const { data: allBids } = await supabase
               .from('bids')
               .select('*, users(username)')
-              .eq('id', newState.current_highest_bid_id)
-              .single();
+              .eq('player_id', currentPlayer.id)
+              .order('created_at', { ascending: true });
             
-            if (bidData) {
-              currentHighestBid = {
-                userId: bidData.user_id,
-                username: (bidData.users as any)?.username || 'Unknown',
-                amount: bidData.amount,
-                timestamp: new Date(bidData.created_at).getTime(),
-              };
+            if (allBids && allBids.length > 0) {
+              bidHistory = allBids.map(bid => ({
+                userId: bid.user_id,
+                username: (bid.users as any)?.username || 'Unknown',
+                amount: bid.amount,
+                timestamp: new Date(bid.created_at).getTime(),
+              }));
+              
+              currentHighestBid = bidHistory[bidHistory.length - 1];
             }
+          } else if (newState.status === 'countdown') {
+            bidHistory = [];
+            currentHighestBid = null;
           }
 
           set({
@@ -156,9 +175,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             timeRemaining: newState.time_remaining,
             countdown: newState.countdown,
             currentHighestBid,
+            bidHistory,
           });
 
-          // Start/stop timer based on status
           if (newState.status === 'countdown' || newState.status === 'active' || newState.status === 'result') {
             if (!timerInterval) {
               timerInterval = setInterval(() => {
@@ -175,7 +194,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       )
       .subscribe();
 
-    // Subscribe to bids changes
     bidsChannel = supabase
       .channel('bids-changes')
       .on(
@@ -203,12 +221,16 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
               timestamp: new Date(newBid.created_at).getTime(),
             };
 
+            const newTimeRemaining = state.timeRemaining <= 15 
+              ? Math.min(state.timeRemaining + 10, 30) 
+              : state.timeRemaining;
+
             set({
               currentHighestBid: bid,
               bidHistory: [...state.bidHistory, bid],
+              timeRemaining: newTimeRemaining,
             });
 
-            // Update auction_state with new highest bid
             const { data: auctionStateData } = await supabase
               .from('auction_state')
               .select('*')
@@ -220,12 +242,28 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                 .from('auction_state')
                 .update({
                   current_highest_bid_id: newBid.id,
-                  time_remaining: Math.max(state.timeRemaining, 10),
+                  time_remaining: newTimeRemaining,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', auctionStateData.id);
             }
           }
+        }
+      )
+      .subscribe();
+
+    usersChannel = supabase
+      .channel('users-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'users',
+        },
+        async () => {
+          const users = await loadUsersWithWonPlayers();
+          set({ users });
         }
       )
       .subscribe();
@@ -240,6 +278,10 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       supabase.removeChannel(bidsChannel);
       bidsChannel = null;
     }
+    if (usersChannel) {
+      supabase.removeChannel(usersChannel);
+      usersChannel = null;
+    }
     if (timerInterval) {
       clearInterval(timerInterval);
       timerInterval = null;
@@ -253,13 +295,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   startAuction: async () => {
-    const state = get();
-
-    // Load users with won players
     const users = await loadUsersWithWonPlayers();
 
-    // Load players
-    const { data: playersData } = await supabase.from('players').select('*');
+    const { data: playersData } = await supabase.from('players').select('*').order('created_at', { ascending: true });
     const players: Player[] = (playersData || []).map((p: any) => ({
       id: p.id,
       name: p.name,
@@ -280,9 +318,12 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       soldPlayers: [],
       unsoldrPlayers: [],
       bidHistory: [],
+      currentHighestBid: null,
+      currentRound: 1,
+      roundTotalPlayers: players.length,
+      roundCurrentIndex: 1,
     });
 
-    // Update auction_state to start
     const { data: auctionStateData } = await supabase
       .from('auction_state')
       .select('*')
@@ -349,8 +390,8 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       return false;
     }
 
-    const minBid = state.currentHighestBid 
-      ? state.currentHighestBid.amount + 1 
+    const minBid = state.currentHighestBid
+      ? state.currentHighestBid.amount + 1
       : state.currentPlayer.basePrice;
 
     if (amount < minBid || amount > user.balance) {
@@ -372,88 +413,69 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   tick: async () => {
+    if (isProcessingTransition) return;
+    
     const state = get();
+    const { data: auctionStateData } = await supabase
+      .from('auction_state')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (!auctionStateData) return;
 
     if (state.status === 'countdown') {
       if (state.countdown > 1) {
-        const { data: auctionStateData } = await supabase
+        await supabase
           .from('auction_state')
-          .select('*')
-          .limit(1)
-          .single();
-
-        if (auctionStateData) {
-          await supabase
-            .from('auction_state')
-            .update({
-              countdown: state.countdown - 1,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', auctionStateData.id);
-        }
+          .update({
+            countdown: state.countdown - 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', auctionStateData.id);
       } else {
-        const { data: auctionStateData } = await supabase
+        await supabase
           .from('auction_state')
-          .select('*')
-          .limit(1)
-          .single();
-
-        if (auctionStateData) {
-          await supabase
-            .from('auction_state')
-            .update({
-              status: 'active',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', auctionStateData.id);
-        }
+          .update({
+            status: 'active',
+            countdown: 0,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', auctionStateData.id);
       }
       return;
     }
 
     if (state.status === 'active') {
       if (state.timeRemaining > 1) {
-        const { data: auctionStateData } = await supabase
+        await supabase
           .from('auction_state')
-          .select('*')
-          .limit(1)
-          .single();
-
-        if (auctionStateData) {
-          await supabase
-            .from('auction_state')
-            .update({
-              time_remaining: state.timeRemaining - 1,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', auctionStateData.id);
-        }
+          .update({
+            time_remaining: state.timeRemaining - 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', auctionStateData.id);
       } else {
-        // End auction
+        isProcessingTransition = true;
         await endCurrentAuction(get, set);
+        isProcessingTransition = false;
       }
       return;
     }
 
     if (state.status === 'result') {
       if (state.countdown > 1) {
-        const { data: auctionStateData } = await supabase
+        await supabase
           .from('auction_state')
-          .select('*')
-          .limit(1)
-          .single();
-
-        if (auctionStateData) {
-          await supabase
-            .from('auction_state')
-            .update({
-              countdown: state.countdown - 1,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', auctionStateData.id);
-        }
+          .update({
+            countdown: state.countdown - 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', auctionStateData.id);
       } else {
+        isProcessingTransition = true;
         await loadNextPlayer(get, set);
+        isProcessingTransition = false;
       }
       return;
     }
@@ -462,10 +484,8 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   reset: async () => {
     get().cleanupRealtime();
 
-    // Delete all bids
     await supabase.from('bids').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-    // Reset user balances
     const { data: usersData } = await supabase.from('users').select('*');
     if (usersData) {
       for (const user of usersData) {
@@ -476,7 +496,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       }
     }
 
-    // Reset auction_state
     const { data: auctionStateData } = await supabase
       .from('auction_state')
       .select('*')
@@ -498,7 +517,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         .eq('id', auctionStateData.id);
     }
 
-    // Load users with reset balances
     const users = await loadUsersWithWonPlayers();
 
     set({
@@ -515,6 +533,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       currentHighestBid: null,
       bidHistory: [],
       resultMessage: null,
+      currentRound: 1,
+      roundTotalPlayers: 0,
+      roundCurrentIndex: 0,
     });
   },
 }));
@@ -525,14 +546,18 @@ async function endCurrentAuction(get: any, set: any) {
   const player = state.currentPlayer!;
 
   let resultMessage = `${player.name} - `;
-  let updatedSoldPlayers = state.soldPlayers;
-  let updatedUnsoldPlayers = state.unsoldrPlayers;
+  let updatedSoldPlayers = [...state.soldPlayers];
+  let updatedUnsoldPlayers = [...state.unsoldrPlayers];
 
   if (winner) {
     resultMessage += `SOLD to ${winner.username} for $${winner.amount.toLocaleString()}!`;
-    updatedSoldPlayers = [...state.soldPlayers, player.id];
+    
+    if (!updatedSoldPlayers.includes(player.id)) {
+      updatedSoldPlayers.push(player.id);
+    }
+    
+    updatedUnsoldPlayers = updatedUnsoldPlayers.filter((id: string) => id !== player.id);
 
-    // Update user balance
     const user = state.users.find((u: User) => u.id === winner.userId);
     if (user) {
       const newBalance = user.balance - winner.amount;
@@ -547,15 +572,20 @@ async function endCurrentAuction(get: any, set: any) {
         amount: winner.amount,
       };
 
-      set({
-        users: state.users.map((u: User) =>
-          u.id === winner.userId ? { ...u, balance: newBalance, wonPlayers: [...u.wonPlayers, wonPlayer] } : u
-        ),
-      });
+      const updatedUsers = state.users.map((u: User) =>
+        u.id === winner.userId ? { ...u, balance: newBalance, wonPlayers: [...u.wonPlayers, wonPlayer] } : u
+      );
+      
+      set({ users: updatedUsers });
     }
   } else {
-    resultMessage += 'UNSOLD';
-    updatedUnsoldPlayers = [...state.unsoldrPlayers, player.id];
+    resultMessage += 'UNSOLD - will re-auction';
+    
+    if (!updatedUnsoldPlayers.includes(player.id)) {
+      updatedUnsoldPlayers.push(player.id);
+    }
+    
+    updatedSoldPlayers = updatedSoldPlayers.filter((id: string) => id !== player.id);
   }
 
   set({
@@ -584,10 +614,19 @@ async function endCurrentAuction(get: any, set: any) {
 
 async function loadNextPlayer(get: any, set: any) {
   const state = get();
+  
+  const soldPlayerIds = new Set(state.soldPlayers);
+  const unsoldPlayerIds = new Set(state.unsoldrPlayers);
+  
+  let nextPlayer: Player | null = null;
+  let nextIndex = -1;
+  let isStartingReauction = false;
 
-  const nextIndex = state.currentPlayerIndex + 1;
+  const remainingPlayers = state.allPlayers.filter(
+    (p: Player) => !soldPlayerIds.has(p.id)
+  );
 
-  if (nextIndex >= state.allPlayers.length) {
+  if (remainingPlayers.length === 0) {
     const { data: auctionStateData } = await supabase
       .from('auction_state')
       .select('*')
@@ -605,15 +644,83 @@ async function loadNextPlayer(get: any, set: any) {
     }
 
     set({
-      resultMessage: 'Auction completed! All players sold.',
+      resultMessage: 'Auction completed! All players auctioned.',
+      status: 'finished',
     });
     return;
   }
 
-  const nextPlayer = state.allPlayers[nextIndex];
+  for (let i = state.currentPlayerIndex + 1; i < state.allPlayers.length; i++) {
+    const player = state.allPlayers[i];
+    if (!soldPlayerIds.has(player.id)) {
+      nextPlayer = player;
+      nextIndex = i;
+      break;
+    }
+  }
+
+  if (!nextPlayer && unsoldPlayerIds.size > 0) {
+    isStartingReauction = true;
+    
+    for (const unsoldId of Array.from(unsoldPlayerIds)) {
+      const player = state.allPlayers.find((p: Player) => p.id === unsoldId);
+      if (player && !soldPlayerIds.has(player.id)) {
+        nextPlayer = player;
+        nextIndex = state.allPlayers.findIndex((p: Player) => p.id === unsoldId);
+        
+        const updatedUnsoldPlayers = state.unsoldrPlayers.filter((id: string) => id !== unsoldId);
+        set({ unsoldrPlayers: updatedUnsoldPlayers });
+        break;
+      }
+    }
+  }
+
+  if (!nextPlayer) {
+    const { data: auctionStateData } = await supabase
+      .from('auction_state')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (auctionStateData) {
+      await supabase
+        .from('auction_state')
+        .update({
+          status: 'finished',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', auctionStateData.id);
+    }
+
+    set({
+      resultMessage: 'Auction completed! All players auctioned.',
+      status: 'finished',
+    });
+    return;
+  }
+
+  let newRoundCurrentIndex = state.roundCurrentIndex + 1;
+  let newRound = state.currentRound;
+  let newRoundTotalPlayers = state.roundTotalPlayers;
+
+  if (isStartingReauction) {
+    newRound = state.currentRound + 1;
+    newRoundTotalPlayers = unsoldPlayerIds.size;
+    newRoundCurrentIndex = 1;
+  }
+
+  if (newRoundCurrentIndex > state.roundTotalPlayers && !isStartingReauction) {
+    newRound = state.currentRound + 1;
+    newRoundTotalPlayers = unsoldPlayerIds.size;
+    newRoundCurrentIndex = 1;
+  }
 
   set({
     bidHistory: [],
+    currentHighestBid: null,
+    currentRound: newRound,
+    roundTotalPlayers: newRoundTotalPlayers,
+    roundCurrentIndex: newRoundCurrentIndex,
   });
 
   const { data: auctionStateData } = await supabase

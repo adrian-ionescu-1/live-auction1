@@ -7,7 +7,17 @@ import { useAuctionStore } from '@/store/auctionStore';
 import PlayerCard from './PlayerCard';
 
 export default function AuctionBoard() {
-  const { status, currentPlayer, countdown, timeRemaining, initializeRealtime, cleanupRealtime } = useAuctionStore();
+  const { 
+    status, 
+    currentPlayer, 
+    countdown, 
+    timeRemaining, 
+    currentRound,
+    roundTotalPlayers,
+    roundCurrentIndex,
+    initializeRealtime, 
+    cleanupRealtime 
+  } = useAuctionStore();
 
   useEffect(() => {
     initializeRealtime();
@@ -79,24 +89,29 @@ export default function AuctionBoard() {
       {/* Player Card */}
       <PlayerCard player={currentPlayer} />
 
-      {/* Player Progress */}
+      {/* Round-based Progress */}
       <div className="w-full max-w-md bg-white rounded-lg p-4 shadow">
         <div className="flex justify-between text-sm text-gray-600 mb-2">
-          <span>Auction Progress</span>
-          <span>Player {useAuctionStore.getState().currentPlayerIndex + 1} of {useAuctionStore.getState().allPlayers.length}</span>
+          <span>
+            {currentRound === 1 ? 'Initial Auction' : `Re-auction Round ${currentRound - 1}`}
+          </span>
+          <span>
+            Player {roundCurrentIndex} of {roundTotalPlayers}
+          </span>
         </div>
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-600 transition-all"
             style={{
-              width: `${
-                ((useAuctionStore.getState().currentPlayerIndex + 1) /
-                  useAuctionStore.getState().allPlayers.length) *
-                100
-              }%`,
+              width: `${(roundCurrentIndex / roundTotalPlayers) * 100}%`,
             }}
           ></div>
         </div>
+        {currentRound > 1 && (
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            Auctioning unsold players
+          </p>
+        )}
       </div>
     </div>
   );
