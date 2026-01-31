@@ -39,5 +39,9 @@ export interface SupabaseAuctionState {
   time_remaining: number
   countdown: number
   current_highest_bid_id: string | null
+  // 🔥 NEW: Progress tracking fields
+  current_round: number
+  round_total_players: number
+  round_current_index: number
   updated_at: string
 }

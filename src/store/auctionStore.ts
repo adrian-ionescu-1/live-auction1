@@ -168,6 +168,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             currentHighestBid = null;
           }
 
+          // 🔥 CRITICAL FIX: Sync progress values from Supabase
           set({
             status: newState.status,
             currentPlayerIndex: newState.current_player_index,
@@ -176,6 +177,10 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             countdown: newState.countdown,
             currentHighestBid,
             bidHistory,
+            // 🔥 NEW: Progress tracking synchronized from database
+            currentRound: newState.current_round || 1,
+            roundTotalPlayers: newState.round_total_players || 0,
+            roundCurrentIndex: newState.round_current_index || 0,
           });
 
           // 🔥 CRITICAL FIX: Only start timer for admin users
@@ -340,6 +345,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       .single();
 
     if (auctionStateData) {
+      // 🔥 CRITICAL FIX: Save progress values to database
       await supabase
         .from('auction_state')
         .update({
@@ -349,6 +355,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
           countdown: COUNTDOWN_DURATION,
           time_remaining: AUCTION_DURATION,
           current_highest_bid_id: null,
+          current_round: 1,
+          round_total_players: players.length,
+          round_current_index: 1,
           updated_at: new Date().toISOString(),
         })
         .eq('id', auctionStateData.id);
@@ -523,6 +532,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       .single();
 
     if (auctionStateData) {
+      // 🔥 CRITICAL FIX: Reset progress values in database
       await supabase
         .from('auction_state')
         .update({
@@ -532,6 +542,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
           countdown: COUNTDOWN_DURATION,
           time_remaining: AUCTION_DURATION,
           current_highest_bid_id: null,
+          current_round: 1,
+          round_total_players: 0,
+          round_current_index: 0,
           updated_at: new Date().toISOString(),
         })
         .eq('id', auctionStateData.id);
@@ -719,6 +732,7 @@ async function loadNextPlayer(get: any, set: any) {
     return;
   }
 
+  // 🔥 CRITICAL FIX: Calculate progress values
   let newRoundCurrentIndex = state.roundCurrentIndex + 1;
   let newRound = state.currentRound;
   let newRoundTotalPlayers = state.roundTotalPlayers;
@@ -735,6 +749,7 @@ async function loadNextPlayer(get: any, set: any) {
     newRoundCurrentIndex = 1;
   }
 
+  // Update local state
   set({
     bidHistory: [],
     currentHighestBid: null,
@@ -750,6 +765,7 @@ async function loadNextPlayer(get: any, set: any) {
     .single();
 
   if (auctionStateData) {
+    // 🔥 CRITICAL FIX: Save progress values to database for ALL clients
     await supabase
       .from('auction_state')
       .update({
@@ -759,6 +775,9 @@ async function loadNextPlayer(get: any, set: any) {
         countdown: COUNTDOWN_DURATION,
         time_remaining: AUCTION_DURATION,
         current_highest_bid_id: null,
+        current_round: newRound,
+        round_total_players: newRoundTotalPlayers,
+        round_current_index: newRoundCurrentIndex,
         updated_at: new Date().toISOString(),
       })
       .eq('id', auctionStateData.id);
