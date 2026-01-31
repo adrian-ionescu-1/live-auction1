@@ -4,9 +4,10 @@
 
 import { useState } from 'react';
 import { AuthService } from '@/services/authService';
+import { UserRole } from '@/types/auction.types';
 
 interface LoginPageProps {
-  onLogin: (userId: string, role: 'ADMIN' | 'USER' | 'SPECTATOR') => void;
+  onLogin: (userId: string, role: UserRole) => void;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {

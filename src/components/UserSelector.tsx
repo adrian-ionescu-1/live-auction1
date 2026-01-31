@@ -5,9 +5,10 @@
 import { useEffect, useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import { AuctionEngine } from '@/services/auctionEngine';
+import { UserRole } from '@/types/auction.types';
 
 export default function UserSelector() {
-  const { users, currentUserId, selectUser } = useAuctionStore();
+  const { users, currentUserId, login } = useAuctionStore();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,6 +49,10 @@ export default function UserSelector() {
     );
   }
 
+  const handleUserSelect = async (userId: string, role: UserRole) => {
+    await login(userId, role);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700 p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full">
@@ -60,9 +65,9 @@ export default function UserSelector() {
           {users.map((user) => (
             <button
               key={user.id}
-              onClick={() => selectUser(user.id)}
+              onClick={() => handleUserSelect(user.id, user.role)}
               className={`p-6 rounded-xl border-2 transition hover:scale-105 ${
-                user.isAdmin
+                user.role === 'ADMIN'
                   ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-indigo-50 hover:border-purple-600'
                   : 'border-blue-300 bg-blue-50 hover:border-blue-500'
               }`}
@@ -70,12 +75,12 @@ export default function UserSelector() {
               <div className="flex items-center justify-between mb-2">
                 <h3
                   className={`text-xl font-bold ${
-                    user.isAdmin ? 'text-purple-700' : 'text-blue-700'
+                    user.role === 'ADMIN' ? 'text-purple-700' : 'text-blue-700'
                   }`}
                 >
                   {user.username}
                 </h3>
-                {user.isAdmin && (
+                {user.role === 'ADMIN' && (
                   <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-1 rounded-full">
                     ADMIN
                   </span>
