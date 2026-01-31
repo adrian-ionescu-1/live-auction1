@@ -302,39 +302,33 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     }
   },
 
-  selectUser: async (userId: string) => {
+  selectUser: (userId: string) => {
     set({ currentUserId: userId });
-    const users = await loadUsersWithWonPlayers();
-    set({ users });
   },
 
   startAuction: async () => {
-    const users = await loadUsersWithWonPlayers();
+    const state = get();
+    if (state.status !== 'idle') return;
 
-    const { data: playersData } = await supabase.from('players').select('*').order('created_at', { ascending: true });
-    const players: Player[] = (playersData || []).map((p: any) => ({
-      id: p.id,
-      name: p.name,
-      role: p.role,
-      rating: p.rating,
-      image: p.image,
-      basePrice: p.base_price,
-    }));
-
-    if (players.length === 0 || users.length === 0) {
-      console.error('Failed to load data from Supabase');
+    const players = await AuctionEngine.loadPlayers();
+    if (players.length === 0) {
+      alert('No players available to auction');
       return;
     }
 
+    const firstPlayer = players[0];
+
+    // 🔥 CRITICAL FIX: Set initial progress values
+    const initialRoundTotalPlayers = players.length;
+
     set({
-      users,
       allPlayers: players,
+      currentPlayerIndex: 0,
+      currentPlayer: firstPlayer,
       soldPlayers: [],
       unsoldrPlayers: [],
-      bidHistory: [],
-      currentHighestBid: null,
       currentRound: 1,
-      roundTotalPlayers: players.length,
+      roundTotalPlayers: initialRoundTotalPlayers,
       roundCurrentIndex: 1,
     });
 
@@ -345,18 +339,18 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       .single();
 
     if (auctionStateData) {
-      // 🔥 CRITICAL FIX: Save progress values to database
+      // 🔥 CRITICAL FIX: Initialize progress values in database
       await supabase
         .from('auction_state')
         .update({
           status: 'countdown',
-          current_player_id: players[0].id,
+          current_player_id: firstPlayer.id,
           current_player_index: 0,
           countdown: COUNTDOWN_DURATION,
           time_remaining: AUCTION_DURATION,
           current_highest_bid_id: null,
           current_round: 1,
-          round_total_players: players.length,
+          round_total_players: initialRoundTotalPlayers,
           round_current_index: 1,
           updated_at: new Date().toISOString(),
         })
@@ -365,13 +359,16 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   pauseAuction: async () => {
+    const state = get();
+    if (state.status !== 'active') return;
+
     const { data: auctionStateData } = await supabase
       .from('auction_state')
       .select('*')
       .limit(1)
       .single();
 
-    if (auctionStateData && auctionStateData.status === 'active') {
+    if (auctionStateData) {
       await supabase
         .from('auction_state')
         .update({
@@ -383,13 +380,16 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   resumeAuction: async () => {
+    const state = get();
+    if (state.status !== 'paused') return;
+
     const { data: auctionStateData } = await supabase
       .from('auction_state')
       .select('*')
       .limit(1)
       .single();
 
-    if (auctionStateData && auctionStateData.status === 'paused') {
+    if (auctionStateData) {
       await supabase
         .from('auction_state')
         .update({
@@ -400,30 +400,34 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     }
   },
 
-  placeBid: async (amount: number): Promise<boolean> => {
+  placeBid: async (amount: number) => {
     const state = get();
-    const user = state.users.find((u) => u.id === state.currentUserId);
+    const currentUser = state.users.find((u) => u.id === state.currentUserId);
 
-    if (!user || !state.currentPlayer || state.status !== 'active') {
+    if (!currentUser) return false;
+    if (state.status !== 'active') return false;
+    if (!state.currentPlayer) return false;
+
+    const minBid = state.currentHighestBid ? state.currentHighestBid.amount + 1 : state.currentPlayer.basePrice;
+    if (amount < minBid) {
+      alert(`Minimum bid is $${minBid.toLocaleString()}`);
       return false;
     }
 
-    const minBid = state.currentHighestBid
-      ? state.currentHighestBid.amount + 1
-      : state.currentPlayer.basePrice;
-
-    if (amount < minBid || amount > user.balance) {
+    if (amount > currentUser.balance) {
+      alert('Insufficient balance');
       return false;
     }
 
     const { error } = await supabase.from('bids').insert({
       player_id: state.currentPlayer.id,
-      user_id: user.id,
-      amount: amount,
+      user_id: currentUser.id,
+      amount,
     });
 
     if (error) {
-      console.error('Failed to save bid:', error);
+      console.error('Error placing bid:', error);
+      alert('Failed to place bid');
       return false;
     }
 
@@ -431,97 +435,125 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   tick: async () => {
-    // 🔥 CRITICAL FIX: Double-check admin status before processing
-    const state = get();
-    const currentUser = state.users.find(u => u.id === state.currentUserId);
-    if (!currentUser?.isAdmin) {
-      // Non-admin should never execute tick logic
-      if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-      }
-      return;
-    }
-
     if (isProcessingTransition) return;
-    
-    const { data: auctionStateData } = await supabase
-      .from('auction_state')
-      .select('*')
-      .limit(1)
-      .single();
 
-    if (!auctionStateData) return;
+    const state = get();
+    const currentUser = state.users.find((u) => u.id === state.currentUserId);
+    const isAdmin = currentUser?.isAdmin || false;
+
+    if (!isAdmin) return;
 
     if (state.status === 'countdown') {
       if (state.countdown > 1) {
-        await supabase
-          .from('auction_state')
-          .update({
-            countdown: state.countdown - 1,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', auctionStateData.id);
-      } else {
-        await supabase
-          .from('auction_state')
-          .update({
-            status: 'active',
-            countdown: 0,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', auctionStateData.id);
-      }
-      return;
-    }
+        const newCountdown = state.countdown - 1;
+        set({ countdown: newCountdown });
 
-    if (state.status === 'active') {
-      if (state.timeRemaining > 1) {
-        await supabase
+        const { data: auctionStateData } = await supabase
           .from('auction_state')
-          .update({
-            time_remaining: state.timeRemaining - 1,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', auctionStateData.id);
+          .select('*')
+          .limit(1)
+          .single();
+
+        if (auctionStateData) {
+          await supabase
+            .from('auction_state')
+            .update({
+              countdown: newCountdown,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', auctionStateData.id);
+        }
+      } else {
+        set({ status: 'active', countdown: 0 });
+
+        const { data: auctionStateData } = await supabase
+          .from('auction_state')
+          .select('*')
+          .limit(1)
+          .single();
+
+        if (auctionStateData) {
+          await supabase
+            .from('auction_state')
+            .update({
+              status: 'active',
+              countdown: 0,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', auctionStateData.id);
+        }
+      }
+    } else if (state.status === 'active') {
+      if (state.timeRemaining > 1) {
+        const newTimeRemaining = state.timeRemaining - 1;
+        set({ timeRemaining: newTimeRemaining });
+
+        const { data: auctionStateData } = await supabase
+          .from('auction_state')
+          .select('*')
+          .limit(1)
+          .single();
+
+        if (auctionStateData) {
+          await supabase
+            .from('auction_state')
+            .update({
+              time_remaining: newTimeRemaining,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', auctionStateData.id);
+        }
       } else {
         isProcessingTransition = true;
         await endCurrentAuction(get, set);
         isProcessingTransition = false;
       }
-      return;
-    }
-
-    if (state.status === 'result') {
+    } else if (state.status === 'result') {
       if (state.countdown > 1) {
-        await supabase
+        const newCountdown = state.countdown - 1;
+        set({ countdown: newCountdown });
+
+        const { data: auctionStateData } = await supabase
           .from('auction_state')
-          .update({
-            countdown: state.countdown - 1,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', auctionStateData.id);
+          .select('*')
+          .limit(1)
+          .single();
+
+        if (auctionStateData) {
+          await supabase
+            .from('auction_state')
+            .update({
+              countdown: newCountdown,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', auctionStateData.id);
+        }
       } else {
         isProcessingTransition = true;
         await loadNextPlayer(get, set);
         isProcessingTransition = false;
       }
-      return;
     }
   },
 
   reset: async () => {
-    get().cleanupRealtime();
+    const currentUser = get().users.find((u) => u.id === get().currentUserId);
+    if (!currentUser?.isAdmin) {
+      alert('Only admin can reset');
+      return;
+    }
+
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
 
     await supabase.from('bids').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
     const { data: usersData } = await supabase.from('users').select('*');
     if (usersData) {
       for (const user of usersData) {
-        await supabase
-          .from('users')
-          .update({ balance: 10000 })
-          .eq('id', user.id);
+        await supabase.from('users').update({ balance: 10000 }).eq('id', user.id);
       }
     }
 
@@ -594,22 +626,46 @@ async function endCurrentAuction(get: any, set: any) {
     const user = state.users.find((u: User) => u.id === winner.userId);
     if (user) {
       const newBalance = user.balance - winner.amount;
-      await supabase
+      
+      console.log('💰 [BUDGET FIX] Updating user balance:', {
+        userId: user.id,
+        username: user.username,
+        oldBalance: user.balance,
+        bidAmount: winner.amount,
+        newBalance: newBalance,
+        playerId: player.id,
+        playerName: player.name
+      });
+      
+      // 🔥 CRITICAL BUDGET FIX: Update database with error checking
+      const { data, error } = await supabase
         .from('users')
         .update({ balance: newBalance })
-        .eq('id', user.id);
-
-      const wonPlayer: WonPlayer = {
-        playerId: player.id,
-        playerName: player.name,
-        amount: winner.amount,
-      };
-
-      const updatedUsers = state.users.map((u: User) =>
-        u.id === winner.userId ? { ...u, balance: newBalance, wonPlayers: [...u.wonPlayers, wonPlayer] } : u
+        .eq('id', user.id)
+        .select();
+      
+      if (error) {
+        console.error('❌ [BUDGET FIX] Failed to update user balance in database:', error);
+        alert(`Critical Error: Failed to update balance for ${user.username}. Please contact admin.`);
+        return; // Don't proceed if database update failed
+      }
+      
+      console.log('✅ [BUDGET FIX] Database update successful:', data);
+      
+      // 🔥 CRITICAL BUDGET FIX: Wait for database transaction to commit
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // 🔥 CRITICAL BUDGET FIX: Reload users from database (single source of truth)
+      const freshUsers = await loadUsersWithWonPlayers();
+      
+      console.log('🔄 [BUDGET FIX] Reloaded users from database. Updated balances:', 
+        freshUsers.map(u => ({ username: u.username, balance: u.balance }))
       );
       
-      set({ users: updatedUsers });
+      // Update local state with fresh database data
+      set({ users: freshUsers });
+      
+      console.log('✅ [BUDGET FIX] Balance update complete and synchronized');
     }
   } else {
     resultMessage += 'UNSOLD - will re-auction';
@@ -783,3 +839,6 @@ async function loadNextPlayer(get: any, set: any) {
       .eq('id', auctionStateData.id);
   }
 }
+
+// Import AuctionEngine for loadPlayers
+import { AuctionEngine } from '@/services/auctionEngine';
