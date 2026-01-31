@@ -110,7 +110,11 @@ export class AuctionEngine {
       timestamp: Date.now(),
     };
 
-    const newTimeRemaining = Math.max(currentTimeRemaining, 10);
+    // If bid placed in last 15 seconds, add 10 seconds (but max 30 total)
+    let newTimeRemaining = currentTimeRemaining;
+    if (currentTimeRemaining <= 15) {
+      newTimeRemaining = Math.min(currentTimeRemaining + 10, 30);
+    }
 
     return { bid, newTimeRemaining };
   }
@@ -180,13 +184,23 @@ export class AuctionEngine {
     soldPlayers: string[],
     unsoldPlayers: string[]
   ): { nextIndex: number; isFinished: boolean } {
-    const nextIndex = currentIndex + 1;
-
-    if (nextIndex >= allPlayers.length) {
+    // Check if we've processed all players
+    const totalProcessed = soldPlayers.length + unsoldPlayers.length;
+    
+    if (totalProcessed >= allPlayers.length) {
       return { nextIndex: -1, isFinished: true };
     }
 
-    return { nextIndex, isFinished: false };
+    // Find next unprocessed player
+    for (let i = currentIndex + 1; i < allPlayers.length; i++) {
+      const playerId = allPlayers[i].id;
+      if (!soldPlayers.includes(playerId) && !unsoldPlayers.includes(playerId)) {
+        return { nextIndex: i, isFinished: false };
+      }
+    }
+
+    // All players have been processed
+    return { nextIndex: -1, isFinished: true };
   }
 
   static async resetAuction(): Promise<boolean> {
