@@ -15,6 +15,7 @@ export default function AuctionBoard() {
     currentRound,
     roundTotalPlayers,
     roundCurrentIndex,
+    currentUserRole,
     initializeRealtime,
     cleanupRealtime,
   } = useAuctionStore();
@@ -71,7 +72,7 @@ export default function AuctionBoard() {
           </div>
         )}
 
-        {status === 'result' && (
+        {status === 'result' && currentUserRole !== 'ADMIN' && (
           <div className="bg-blue-500 text-white rounded-xl p-8 text-center shadow-lg">
             <p className="text-lg font-semibold mb-2">Result</p>
             <p className="text-xl">{useAuctionStore.getState().resultMessage}</p>
