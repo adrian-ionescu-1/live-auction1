@@ -113,140 +113,261 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   /**
+   * Start auction (admin only)
+   */
+  startAuction: async () => {
+    const state = get();
+    if (state.currentUserRole !== 'ADMIN') {
+      console.error('Only admin can start auction');
+      return;
+    }
+
+    const players = await AuctionEngine.loadPlayers();
+    if (players.length === 0) {
+      console.error('No players available for auction');
+      return;
+    }
+
+    set({
+      allPlayers: players,
+      currentPlayerIndex: 0,
+      currentPlayer: players[0],
+      countdown: COUNTDOWN_DURATION,
+      currentRound: 1,
+      roundTotalPlayers: players.length,
+      roundCurrentIndex: 1,
+    });
+
+    await AuctionEngine.updateAuctionState({
+      status: 'countdown',
+      current_player_id: players[0].id,
+      current_player_index: 0,
+      countdown: COUNTDOWN_DURATION,
+      current_round: 1,
+      round_total_players: players.length,
+      round_current_index: 1,
+    });
+  },
+
+  /**
+   * Pause auction (admin only)
+   */
+  pauseAuction: async () => {
+    const state = get();
+    if (state.currentUserRole !== 'ADMIN') {
+      console.error('Only admin can pause auction');
+      return;
+    }
+
+    await AuctionEngine.updateAuctionState({ status: 'paused' });
+  },
+
+  /**
+   * Resume auction (admin only)
+   */
+  resumeAuction: async () => {
+    const state = get();
+    if (state.currentUserRole !== 'ADMIN') {
+      console.error('Only admin can resume auction');
+      return;
+    }
+
+    await AuctionEngine.updateAuctionState({ status: 'active' });
+  },
+
+  /**
+   * Place a bid (users only)
+   */
+  placeBid: async (amount: number): Promise<boolean> => {
+    const state = get();
+
+    if (state.currentUserRole !== 'USER') {
+      console.error('Only users can place bids');
+      return false;
+    }
+
+    if (state.status !== 'active') {
+      console.error('Auction is not active');
+      return false;
+    }
+
+    if (!state.currentPlayer) {
+      console.error('No current player');
+      return false;
+    }
+
+    const currentUser = state.users.find((u: User) => u.id === state.currentUserId);
+    if (!currentUser) {
+      console.error('User not found');
+      return false;
+    }
+
+    if (currentUser.balance < amount) {
+      console.error('Insufficient balance');
+      return false;
+    }
+
+    const currentHighestBid = state.currentHighestBid;
+    if (currentHighestBid && amount <= currentHighestBid.amount) {
+      console.error('Bid must be higher than current highest bid');
+      return false;
+    }
+
+    const minBid = currentHighestBid ? currentHighestBid.amount + 10 : state.currentPlayer.basePrice;
+    if (amount < minBid) {
+      console.error(`Bid must be at least $${minBid}`);
+      return false;
+    }
+
+    const bidId = await AuctionEngine.saveBid(state.currentPlayer.id, currentUser.id, amount);
+    if (!bidId) {
+      console.error('Failed to save bid');
+      return false;
+    }
+
+    const newBid: Bid = {
+      userId: currentUser.id,
+      username: currentUser.username,
+      amount,
+      timestamp: Date.now(),
+    };
+
+    set({
+      currentHighestBid: newBid,
+      bidHistory: [...state.bidHistory, newBid],
+    });
+
+    await AuctionEngine.updateAuctionState({
+      current_highest_bid_id: bidId,
+      time_remaining: AUCTION_DURATION,
+    });
+
+    return true;
+  },
+
+  /**
    * Initialize realtime subscriptions
    */
   initializeRealtime: () => {
-    get().cleanupRealtime();
+    const state = get();
 
-    // Subscribe to auction_state changes
+    // Auction State Channel
     auctionStateChannel = supabase
-      .channel('auction-state-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'auction_state' }, async (payload) => {
-        const newState = payload.new as any;
-        const state = get();
+      .channel('auction_state_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'auction_state',
+        },
+        async (payload: any) => {
+          const newState = payload.new;
+          if (!newState) return;
 
-        // Find current player
-        let currentPlayer: Player | null = null;
-        if (newState.current_player_id) {
-          currentPlayer = state.allPlayers.find((p) => p.id === newState.current_player_id) || null;
-          
-          // If player not in local state, fetch from database
-          if (!currentPlayer) {
-            const { data } = await supabase.from('players').select('*').eq('id', newState.current_player_id).single();
-            if (data) {
-              currentPlayer = {
-                id: data.id,
-                name: data.name,
-                role: data.role,
-                rating: data.rating,
-                image: data.image,
-                basePrice: data.base_price,
-              };
+          const currentState = get();
+          let currentPlayer: Player | null = null;
+
+          if (newState.current_player_id) {
+            currentPlayer = currentState.allPlayers.find((p: Player) => p.id === newState.current_player_id) || null;
+          }
+
+          const soldPlayers = Array.isArray(newState.sold_players) ? newState.sold_players : [];
+          const unsoldrPlayers = Array.isArray(newState.unsold_players) ? newState.unsold_players : [];
+
+          set({
+            status: newState.status as AuctionStatus,
+            currentPlayerIndex: newState.current_player_index,
+            currentPlayer,
+            countdown: newState.countdown,
+            timeRemaining: newState.time_remaining,
+            currentRound: newState.current_round,
+            roundTotalPlayers: newState.round_total_players,
+            roundCurrentIndex: newState.round_current_index,
+            soldPlayers,
+            unsoldrPlayers,
+          });
+
+          if (newState.status === 'countdown' || newState.status === 'active' || newState.status === 'result') {
+            if (!timerInterval) {
+              timerInterval = setInterval(() => {
+                get().tick();
+              }, 1000);
+            }
+          } else if (newState.status === 'idle' || newState.status === 'paused' || newState.status === 'finished') {
+            if (timerInterval) {
+              clearInterval(timerInterval);
+              timerInterval = null;
             }
           }
-        }
 
-        // Load current highest bid and bid history
-        let currentHighestBid: Bid | null = null;
-        let bidHistory: Bid[] = [];
-
-        if (newState.current_highest_bid_id && currentPlayer) {
-          const { data: allBids } = await supabase
-            .from('bids')
-            .select('*, users(username)')
-            .eq('player_id', currentPlayer.id)
-            .order('created_at', { ascending: true });
-
-          if (allBids && allBids.length > 0) {
-            bidHistory = allBids.map((bid: any) => ({
-              userId: bid.user_id,
-              username: bid.users?.username || 'Unknown',
-              amount: bid.amount,
-              timestamp: new Date(bid.created_at).getTime(),
-            }));
-            currentHighestBid = bidHistory[bidHistory.length - 1];
-          }
-        } else if (newState.status === 'countdown') {
-          // Clear bids when new player countdown starts
-          bidHistory = [];
-          currentHighestBid = null;
-        }
-
-        const soldPlayers = Array.isArray(newState.sold_players) ? newState.sold_players : [];
-        const unsoldrPlayers = Array.isArray(newState.unsold_players) ? newState.unsold_players : [];
-
-        set({
-          status: newState.status,
-          currentPlayerIndex: newState.current_player_index,
-          currentPlayer,
-          timeRemaining: newState.time_remaining,
-          countdown: newState.countdown,
-          currentHighestBid,
-          bidHistory,
-          currentRound: newState.current_round,
-          roundTotalPlayers: newState.round_total_players,
-          roundCurrentIndex: newState.round_current_index,
-          soldPlayers,
-          unsoldrPlayers,
-        });
-
-        // Start/stop timer based on status
-        if (['countdown', 'active', 'result'].includes(newState.status)) {
-          if (!timerInterval) {
-            timerInterval = setInterval(() => get().tick(), 1000);
-          }
-        } else {
-          if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
+          if (newState.current_player_id && newState.current_player_id !== currentState.currentPlayer?.id) {
+            set({ bidHistory: [], currentHighestBid: null });
           }
         }
-      })
+      )
       .subscribe();
 
-    // Subscribe to new bids
+    // Bids Channel
     bidsChannel = supabase
-      .channel('bids-changes')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids' }, async (payload) => {
-        const newBid = payload.new as any;
-        const state = get();
+      .channel('bids_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'bids',
+        },
+        async (payload: any) => {
+          const newBid = payload.new;
+          const currentState = get();
 
-        // Only process if bid is for current player
-        if (newBid.player_id === state.currentPlayer?.id) {
-          const { data: userData } = await supabase.from('users').select('username').eq('id', newBid.user_id).single();
+          if (!currentState.currentPlayer || newBid.player_id !== currentState.currentPlayer.id) {
+            return;
+          }
+
+          const user = currentState.users.find((u: User) => u.id === newBid.user_id);
+          if (!user) return;
 
           const bid: Bid = {
             userId: newBid.user_id,
-            username: userData?.username || 'Unknown',
+            username: user.username,
             amount: newBid.amount,
             timestamp: new Date(newBid.created_at).getTime(),
           };
 
-          // Add time if bid placed in last 15 seconds
-          const newTimeRemaining = state.timeRemaining <= 15 ? Math.min(state.timeRemaining + 10, 30) : state.timeRemaining;
+          const existingBid = currentState.bidHistory.find(
+            (b: Bid) => b.userId === bid.userId && b.amount === bid.amount && Math.abs(b.timestamp - bid.timestamp) < 1000
+          );
 
-          set({
-            currentHighestBid: bid,
-            bidHistory: [...state.bidHistory, bid],
-            timeRemaining: newTimeRemaining,
-          });
+          if (!existingBid) {
+            set({
+              bidHistory: [...currentState.bidHistory, bid],
+            });
 
-          // Update auction state with new time
-          await AuctionEngine.updateAuctionState({
-            current_highest_bid_id: newBid.id,
-            time_remaining: newTimeRemaining,
-          });
+            if (!currentState.currentHighestBid || bid.amount > currentState.currentHighestBid.amount) {
+              set({ currentHighestBid: bid });
+            }
+          }
         }
-      })
+      )
       .subscribe();
 
-    // Subscribe to user updates (balance changes)
+    // Users Channel
     usersChannel = supabase
-      .channel('users-changes')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, async () => {
-        const users = await AuctionEngine.loadUsers();
-        set({ users });
-      })
+      .channel('users_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'users',
+        },
+        async () => {
+          const users = await AuctionEngine.loadUsers();
+          set({ users });
+        }
+      )
       .subscribe();
   },
 
@@ -273,83 +394,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   },
 
   /**
-   * Start auction (admin only)
-   */
-  startAuction: async () => {
-    const users = await AuctionEngine.loadUsers();
-    const players = await AuctionEngine.loadPlayers();
-
-    if (players.length === 0) {
-      console.error('No players to auction');
-      return;
-    }
-
-    set({
-      users,
-      allPlayers: players,
-      soldPlayers: [],
-      unsoldrPlayers: [],
-      bidHistory: [],
-      currentHighestBid: null,
-      currentRound: 1,
-      roundTotalPlayers: players.length,
-      roundCurrentIndex: 1,
-    });
-
-    await AuctionEngine.updateAuctionState({
-      status: 'countdown',
-      current_player_id: players[0].id,
-      current_player_index: 0,
-      countdown: COUNTDOWN_DURATION,
-      time_remaining: AUCTION_DURATION,
-      current_highest_bid_id: null,
-      current_round: 1,
-      round_total_players: players.length,
-      round_current_index: 1,
-      sold_players: [],
-      unsold_players: [],
-    });
-  },
-
-  /**
-   * Pause auction (admin only)
-   */
-  pauseAuction: async () => {
-    await AuctionEngine.updateAuctionState({ status: 'paused' });
-  },
-
-  /**
-   * Resume auction (admin only)
-   */
-  resumeAuction: async () => {
-    await AuctionEngine.updateAuctionState({ status: 'active' });
-  },
-
-  /**
-   * Place a bid (users only)
-   */
-  placeBid: async (amount: number): Promise<boolean> => {
-    const state = get();
-    const user = state.users.find((u) => u.id === state.currentUserId);
-
-    // Validation
-    if (!user || user.role !== 'USER' || !state.currentPlayer || state.status !== 'active') {
-      return false;
-    }
-
-    const minBid = state.currentHighestBid ? state.currentHighestBid.amount + 1 : state.currentPlayer.basePrice;
-
-    if (amount < minBid || amount > user.balance) {
-      return false;
-    }
-
-    // Save bid to database
-    const bidId = await AuctionEngine.saveBid(state.currentPlayer.id, user.id, amount);
-    return bidId !== null;
-  },
-
-  /**
-   * Timer tick (called every second)
+   * Timer tick
    */
   tick: async () => {
     if (isProcessingTransition) return;
@@ -360,7 +405,11 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       if (state.countdown > 1) {
         await AuctionEngine.updateAuctionState({ countdown: state.countdown - 1 });
       } else {
-        await AuctionEngine.updateAuctionState({ status: 'active', countdown: 0 });
+        await AuctionEngine.updateAuctionState({
+          status: 'active',
+          countdown: 0,
+          time_remaining: AUCTION_DURATION,
+        });
       }
       return;
     }
@@ -394,15 +443,20 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
    * Reset auction (admin only)
    */
   reset: async () => {
-    get().cleanupRealtime();
+    const state = get();
+    const currentUserId = state.currentUserId;
+    const currentUserRole = state.currentUserRole;
+    
     await AuctionEngine.resetAuction();
     
     const users = await AuctionEngine.loadUsers();
+    const players = await AuctionEngine.loadPlayers();
+    
     set({
       users,
-      currentUserId: null,
-      currentUserRole: null,
-      allPlayers: [],
+      currentUserId,
+      currentUserRole,
+      allPlayers: players,
       currentPlayerIndex: -1,
       currentPlayer: null,
       soldPlayers: [],
@@ -498,85 +552,93 @@ async function loadNextPlayer(get: any, set: any) {
 
   if (remainingPlayers.length === 0) {
     // Auction complete
-    await AuctionEngine.updateAuctionState({ status: 'finished' });
-    set({ status: 'finished', resultMessage: 'Auction completed! All players sold.' });
+    await AuctionEngine.updateAuctionState({
+      status: 'finished',
+      current_player_id: null,
+      current_player_index: -1,
+    });
+
+    set({
+      currentPlayer: null,
+      currentPlayerIndex: -1,
+      status: 'finished',
+    });
+
     return;
   }
 
-  let nextPlayer: Player | null = null;
-  let nextIndex = -1;
-  let isStartingReauction = false;
+  // Check if we need to start re-auction round
+  const currentRoundPlayers =
+    state.currentRound === 1
+      ? state.allPlayers.filter((p: Player) => !soldPlayerIds.has(p.id) && !unsoldPlayerIds.has(p.id))
+      : state.allPlayers.filter((p: Player) => unsoldPlayerIds.has(p.id) && !soldPlayerIds.has(p.id));
 
-  // First, try to find next unsold player in sequential order
-  for (let i = state.currentPlayerIndex + 1; i < state.allPlayers.length; i++) {
-    const player = state.allPlayers[i];
-    if (!soldPlayerIds.has(player.id)) {
-      nextPlayer = player;
-      nextIndex = i;
-      break;
+  if (currentRoundPlayers.length === 0) {
+    // Start new round with unsold players
+    const unsoldPlayers = state.allPlayers.filter((p: Player) => unsoldPlayerIds.has(p.id));
+
+    if (unsoldPlayers.length === 0) {
+      // No more players - finish
+      await AuctionEngine.updateAuctionState({
+        status: 'finished',
+        current_player_id: null,
+        current_player_index: -1,
+      });
+
+      set({
+        currentPlayer: null,
+        currentPlayerIndex: -1,
+        status: 'finished',
+      });
+
+      return;
     }
+
+    // Start re-auction round
+    const nextPlayer = unsoldPlayers[0];
+    const newRound = state.currentRound + 1;
+
+    set({
+      currentPlayer: nextPlayer,
+      currentPlayerIndex: 0,
+      currentRound: newRound,
+      roundTotalPlayers: unsoldPlayers.length,
+      roundCurrentIndex: 1,
+      bidHistory: [],
+      currentHighestBid: null,
+      unsoldrPlayers: [],
+    });
+
+    await AuctionEngine.updateAuctionState({
+      status: 'countdown',
+      current_player_id: nextPlayer.id,
+      current_player_index: 0,
+      countdown: COUNTDOWN_DURATION,
+      current_round: newRound,
+      round_total_players: unsoldPlayers.length,
+      round_current_index: 1,
+      unsold_players: [],
+    });
+  } else {
+    // Continue current round
+    const nextPlayer = currentRoundPlayers[0];
+    const newIndex = state.currentPlayerIndex + 1;
+    const newRoundIndex = state.roundCurrentIndex + 1;
+
+    set({
+      currentPlayer: nextPlayer,
+      currentPlayerIndex: newIndex,
+      roundCurrentIndex: newRoundIndex,
+      bidHistory: [],
+      currentHighestBid: null,
+    });
+
+    await AuctionEngine.updateAuctionState({
+      status: 'countdown',
+      current_player_id: nextPlayer.id,
+      current_player_index: newIndex,
+      countdown: COUNTDOWN_DURATION,
+      round_current_index: newRoundIndex,
+    });
   }
-
-  // If no sequential player found, check re-auction queue
-  if (!nextPlayer && unsoldPlayerIds.size > 0) {
-    isStartingReauction = true;
-
-    for (const unsoldId of Array.from(unsoldPlayerIds)) {
-      const player = state.allPlayers.find((p: Player) => p.id === unsoldId);
-      if (player && !soldPlayerIds.has(player.id)) {
-        nextPlayer = player;
-        nextIndex = state.allPlayers.findIndex((p: Player) => p.id === unsoldId);
-
-        // Remove from unsold queue
-        const updatedUnsoldPlayers = state.unsoldrPlayers.filter((id: string) => id !== unsoldId);
-        set({ unsoldrPlayers: updatedUnsoldPlayers });
-        break;
-      }
-    }
-  }
-
-  // If still no player found, auction is complete
-  if (!nextPlayer) {
-    await AuctionEngine.updateAuctionState({ status: 'finished' });
-    set({ status: 'finished', resultMessage: 'Auction completed! All players sold.' });
-    return;
-  }
-
-  // Calculate round progress
-  let newRoundCurrentIndex = state.roundCurrentIndex + 1;
-  let newRound = state.currentRound;
-  let newRoundTotalPlayers = state.roundTotalPlayers;
-
-  if (isStartingReauction) {
-    // Starting a new re-auction round
-    newRound = state.currentRound + 1;
-    newRoundTotalPlayers = unsoldPlayerIds.size;
-    newRoundCurrentIndex = 1;
-  } else if (newRoundCurrentIndex > state.roundTotalPlayers) {
-    // Finished current round, starting new one
-    newRound = state.currentRound + 1;
-    newRoundTotalPlayers = unsoldPlayerIds.size;
-    newRoundCurrentIndex = 1;
-  }
-
-  set({
-    bidHistory: [],
-    currentHighestBid: null,
-    currentRound: newRound,
-    roundTotalPlayers: newRoundTotalPlayers,
-    roundCurrentIndex: newRoundCurrentIndex,
-  });
-
-  // Update database to start next player
-  await AuctionEngine.updateAuctionState({
-    status: 'countdown',
-    current_player_id: nextPlayer.id,
-    current_player_index: nextIndex,
-    countdown: COUNTDOWN_DURATION,
-    time_remaining: AUCTION_DURATION,
-    current_highest_bid_id: null,
-    current_round: newRound,
-    round_total_players: newRoundTotalPlayers,
-    round_current_index: newRoundCurrentIndex,
-  });
 }
