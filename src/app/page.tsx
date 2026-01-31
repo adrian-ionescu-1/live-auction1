@@ -5,7 +5,6 @@
 import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import LoginPage from '@/components/LoginPage';
-import UserSelector from '@/components/UserSelector';
 import AuctionBoard from '@/components/AuctionBoard';
 import BidControls from '@/components/BidControls';
 import AdminControls from '@/components/AdminControls';
@@ -16,15 +15,22 @@ import AdminUserCards from '@/components/AdminUserCards';
 import ResultsView from '@/components/ResultsView';
 
 export default function Home() {
-  const { currentUserId, currentUserRole, status, login, logout } = useAuctionStore();
+  const { currentUserId, currentUserRole, status, login } = useAuctionStore();
+  // Local state: whether the user/spectator has dismissed the final-results modal.
+  // Resets to false automatically whenever status changes away from 'finished'
+  // (e.g. after an admin reset propagates via realtime).
+  const [resultsModalDismissed, setResultsModalDismissed] = useState(false);
 
   if (!currentUserId || !currentUserRole) {
     return <LoginPage onLogin={login} />;
   }
 
-  if (status === 'finished') {
-    return <ResultsView />;
-  }
+  // Determine whether the final-results modal should be visible.
+  // Conditions: auction is finished AND role is not ADMIN AND user hasn't dismissed it.
+  const showResultsModal =
+    status === 'finished' &&
+    currentUserRole !== 'ADMIN' &&
+    !resultsModalDismissed;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
@@ -58,6 +64,11 @@ export default function Home() {
       </div>
 
       <ResultBanner />
+
+      {/* Final-results modal: USER / SPECTATOR only, dismissible, auto-closes on reset */}
+      {showResultsModal && (
+        <ResultsView onClose={() => setResultsModalDismissed(true)} />
+      )}
     </main>
   );
 }

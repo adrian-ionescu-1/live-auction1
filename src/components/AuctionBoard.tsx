@@ -28,13 +28,30 @@ export default function AuctionBoard() {
   }, [initializeRealtime, cleanupRealtime]);
 
   if (!currentPlayer) {
+    // Determine what message to show when there is no active player.
+    // 'finished' → auction ended, waiting for admin to reset.
+    // 'idle'     → not started yet (or just reset).
+    // anything else → transient loading state.
+    let message: string;
+    let sub: string | null = null;
+
+    if (status === 'finished') {
+      message = 'Auction finished';
+      sub = currentUserRole === 'ADMIN'
+        ? 'Use Reset Auction to start a new one'
+        : 'Waiting for the admin to start a new auction…';
+    } else if (status === 'idle') {
+      message = 'Waiting for auction to start...';
+      sub = 'Admin will start the auction soon';
+    } else {
+      message = 'Loading...';
+    }
+
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-700 mb-4">
-            {status === 'idle' ? 'Waiting for auction to start...' : 'Loading...'}
-          </h2>
-          {status === 'idle' && <p className="text-gray-500">Admin will start the auction soon</p>}
+          <h2 className="text-3xl font-bold text-gray-700 mb-4">{message}</h2>
+          {sub && <p className="text-gray-500">{sub}</p>}
         </div>
       </div>
     );
