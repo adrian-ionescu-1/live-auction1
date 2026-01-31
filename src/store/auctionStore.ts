@@ -55,12 +55,17 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   login: async (userId: string, role: UserRole) => {
     set({ currentUserId: userId, currentUserRole: role });
 
-    const auctionState = await AuctionEngine.getAuctionState();
-    const soldPlayers = auctionState && Array.isArray(auctionState.sold_players) ? auctionState.sold_players : [];
+    // Persist identity so it survives a page refresh (F5 / reload).
+    // sessionStorage lives for the lifetime of the tab and is cleared
+    // automatically when the tab closes — refreshing is not a logout,
+    // but closing the browser is.
+    sessionStorage.setItem('auction_user_id', userId);
+    sessionStorage.setItem('auction_user_role', role);
 
-    // Pass soldPlayers so loadUsers only marks actually-sold players as won
-    const users = await AuctionEngine.loadUsers(soldPlayers);
+    // Load users and players
+    const users = await AuctionEngine.loadUsers();
     const players = await AuctionEngine.loadPlayers();
+    const auctionState = await AuctionEngine.getAuctionState();
 
     if (auctionState) {
       let currentPlayer: Player | null = null;
@@ -68,6 +73,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         currentPlayer = players.find((p: Player) => p.id === auctionState.current_player_id) || null;
       }
 
+      const soldPlayers = Array.isArray(auctionState.sold_players) ? auctionState.sold_players : [];
       const unsoldrPlayers = Array.isArray(auctionState.unsold_players) ? auctionState.unsold_players : [];
 
       set({
@@ -91,6 +97,10 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
    * Logout current user
    */
   logout: () => {
+    // Clear persisted identity so the next mount does not re-hydrate.
+    sessionStorage.removeItem('auction_user_id');
+    sessionStorage.removeItem('auction_user_role');
+
     get().cleanupRealtime();
     set({
       currentUserId: null,
@@ -117,6 +127,8 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
    * Initialize realtime subscriptions
    */
   initializeRealtime: () => {
+    const state = get();
+
     // Auction state changes
     auctionStateChannel = supabase
       .channel('auction-state-changes')
@@ -133,15 +145,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
 
         const soldPlayers = Array.isArray(newState.sold_players) ? newState.sold_players : [];
         const unsoldrPlayers = Array.isArray(newState.unsold_players) ? newState.unsold_players : [];
-
-        // ── FIX #3: propagate reset to all clients ──
-        // When the status transitions to 'idle', a reset just completed in the DB.
-        // Every client must reload users so balances and wonPlayers are fresh.
-        // Previously only the admin tab did a local set(); other tabs kept stale data.
-        if (newState.status === 'idle') {
-          const freshUsers = await AuctionEngine.loadUsers([]);
-          set({ users: freshUsers });
-        }
 
         set({
           status: newState.status as AuctionStatus,
@@ -203,21 +206,14 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         );
 
         if (!existingBid) {
-          // ── FIX #1 (timer): correct bid-time-extension logic ──
-          // BUG WAS: `const newTimeRemaining = AUCTION_DURATION;`
-          // That reset the timer to a full 30s on EVERY bid regardless of when
-          // the bid arrived. The rule is: add 10s only when <=15s remain, cap at 30.
-          const currentTime = state.timeRemaining;
-          const newTimeRemaining = currentTime <= 15
-            ? Math.min(currentTime + 10, AUCTION_DURATION)
-            : currentTime;
+          const newTimeRemaining = AUCTION_DURATION;
 
           set({
             bidHistory: [...state.bidHistory, bid],
-            currentHighestBid: bid,
             timeRemaining: newTimeRemaining,
           });
 
+          // Update auction state with new time
           await AuctionEngine.updateAuctionState({
             current_highest_bid_id: newBid.id,
             time_remaining: newTimeRemaining,
@@ -227,12 +223,10 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       .subscribe();
 
     // Subscribe to user updates (balance changes)
-    // ── FIX #1 (wonPlayers): pass soldPlayers so only truly sold players count as won ──
     usersChannel = supabase
       .channel('users-changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, async () => {
-        const state = get();
-        const users = await AuctionEngine.loadUsers(state.soldPlayers);
+        const users = await AuctionEngine.loadUsers();
         set({ users });
       })
       .subscribe();
@@ -264,7 +258,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
    * Start auction (admin only)
    */
   startAuction: async () => {
-    const users = await AuctionEngine.loadUsers([]);
+    const users = await AuctionEngine.loadUsers();
     const players = await AuctionEngine.loadPlayers();
 
     if (players.length === 0) {
@@ -393,6 +387,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       if (state.timeRemaining > 1) {
         await AuctionEngine.updateAuctionState({ time_remaining: state.timeRemaining - 1 });
       } else {
+        // Time's up - end current auction
         isProcessingTransition = true;
         await endCurrentAuction(get, set);
         isProcessingTransition = false;
@@ -404,6 +399,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       if (state.countdown > 1) {
         await AuctionEngine.updateAuctionState({ countdown: state.countdown - 1 });
       } else {
+        // Result display finished - load next player
         isProcessingTransition = true;
         await loadNextPlayer(get, set);
         isProcessingTransition = false;
@@ -414,30 +410,17 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
 
   /**
    * Reset auction (admin only)
-   *
-   * FIX #3: Stop the local timer before resetting. The DB reset writes
-   * auction_state LAST (after bids are deleted and balances restored),
-   * so when the realtime handler fires 'idle' on other clients, all
-   * underlying data is already clean. The handler then reloads users.
    */
   reset: async () => {
     const state = get();
     const currentUserId = state.currentUserId;
     const currentUserRole = state.currentUserRole;
-
-    // Stop timer immediately — no ticks should fire during reset
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-    }
-    isProcessingTransition = true;
-
+    
     await AuctionEngine.resetAuction();
-
-    // Reload for this client right away
-    const users = await AuctionEngine.loadUsers([]);
+    
+    const users = await AuctionEngine.loadUsers();
     const players = await AuctionEngine.loadPlayers();
-
+    
     set({
       users,
       currentUserId,
@@ -457,15 +440,12 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       roundTotalPlayers: 0,
       roundCurrentIndex: 0,
     });
-
-    isProcessingTransition = false;
-    // Realtime propagates status='idle' → other clients reload users in their handler.
   },
 }));
 
-// ─────────────────────────────────────────────────────────
-// endCurrentAuction
-// ─────────────────────────────────────────────────────────
+/**
+ * End current player auction
+ */
 async function endCurrentAuction(get: any, set: any) {
   const state = get();
   const winner = state.currentHighestBid;
@@ -476,6 +456,7 @@ async function endCurrentAuction(get: any, set: any) {
   let updatedUnsoldPlayers = [...state.unsoldrPlayers];
 
   if (winner) {
+    // Player was sold
     resultMessage += `SOLD to ${winner.username} for $${winner.amount.toLocaleString()}!`;
 
     if (!updatedSoldPlayers.includes(player.id)) {
@@ -483,35 +464,26 @@ async function endCurrentAuction(get: any, set: any) {
     }
     updatedUnsoldPlayers = updatedUnsoldPlayers.filter((id: string) => id !== player.id);
 
-    // ── FIX #1 (budget): read winner balance fresh from DB before deducting ──
-    // BUG WAS: used state.users which could be stale. The usersChannel realtime
-    // handler calls loadUsers() which previously counted ALL bidded players as
-    // "won" — so balances got recomputed wrong. Two fixes combined:
-    //   (a) loadUsers now receives soldPlayers and only marks sold players as won.
-    //   (b) We read fresh from DB here so we always deduct from the real balance.
-    const freshUsers = await AuctionEngine.loadUsers(updatedSoldPlayers);
-    const freshWinner = freshUsers.find((u: User) => u.id === winner.userId);
+    // Update user balance
+    const user = state.users.find((u: User) => u.id === winner.userId);
+    if (user) {
+      const newBalance = user.balance - winner.amount;
+      await AuctionEngine.updateUserBalance(user.id, newBalance);
 
-    if (freshWinner) {
-      const newBalance = freshWinner.balance - winner.amount;
-      await AuctionEngine.updateUserBalance(freshWinner.id, newBalance);
+      const wonPlayer: WonPlayer = {
+        playerId: player.id,
+        playerName: player.name,
+        amount: winner.amount,
+      };
 
-      // Build updated users list from the fresh snapshot, then apply this sale on top
-      const updatedUsers = freshUsers.map((u: User) =>
-        u.id === winner.userId
-          ? {
-              ...u,
-              balance: newBalance,
-              wonPlayers: [
-                ...u.wonPlayers,
-                { playerId: player.id, playerName: player.name, amount: winner.amount } as WonPlayer,
-              ],
-            }
-          : u
+      const updatedUsers = state.users.map((u: User) =>
+        u.id === winner.userId ? { ...u, balance: newBalance, wonPlayers: [...u.wonPlayers, wonPlayer] } : u
       );
+
       set({ users: updatedUsers });
     }
   } else {
+    // Player was unsold - add to re-auction queue
     resultMessage += 'UNSOLD - will re-auction';
 
     if (!updatedUnsoldPlayers.includes(player.id)) {
@@ -526,6 +498,7 @@ async function endCurrentAuction(get: any, set: any) {
     resultMessage,
   });
 
+  // Update database
   await AuctionEngine.updateAuctionState({
     status: 'result',
     countdown: RESULT_DISPLAY_DURATION,
@@ -534,54 +507,97 @@ async function endCurrentAuction(get: any, set: any) {
   });
 }
 
-// ─────────────────────────────────────────────────────────
-// loadNextPlayer
-//
-// FIX #2: Rewrote the sequencing logic entirely.
-//
-// OLD logic computed "currentRoundPlayers" by set-filtering allPlayers against
-// sold & unsold. This broke because:
-//   • In round 1 it filtered for "not sold AND not unsold", which excluded any
-//     player that had already gone unsold — so it could never find them again.
-//   • When starting a re-auction round it cleared unsoldrPlayers to [].
-//     So for the 2nd+ player in that re-auction, the unsold set was empty and
-//     it kept trying to start new rounds → infinite loop / stuck.
-//
-// NEW logic uses a simple explicit walk:
-//   1. Walk forward in allPlayers from currentPlayerIndex+1. Skip sold & already-
-//      queued-as-unsold players. If found → continue round 1 sequence.
-//   2. If nothing left in original sequence, look at the unsold queue.
-//      If empty → finished. If not → start (or continue) a re-auction round.
-//   3. The unsold queue is NEVER cleared mid-auction. Players are only removed
-//      from it when they finally get sold (in endCurrentAuction).
-// ─────────────────────────────────────────────────────────
+/**
+ * Load next player (or finish auction)
+ */
 async function loadNextPlayer(get: any, set: any) {
   const state = get();
-  const soldSet = new Set(state.soldPlayers);
-  const unsoldList: string[] = state.unsoldrPlayers;
 
-  // ── STEP 1: try to continue the original player sequence ──
-  let nextPlayer: Player | null = null;
-  let nextIndex = -1;
+  const soldPlayerIds = new Set(state.soldPlayers);
+  const unsoldPlayerIds = new Set(state.unsoldrPlayers);
 
-  for (let i = state.currentPlayerIndex + 1; i < state.allPlayers.length; i++) {
-    const candidate = state.allPlayers[i];
-    // Skip: already sold, or already sitting in the unsold queue from a prior iteration
-    if (!soldSet.has(candidate.id) && !unsoldList.includes(candidate.id)) {
-      nextPlayer = candidate;
-      nextIndex = i;
-      break;
-    }
+  // Check if all players are sold
+  const remainingPlayers = state.allPlayers.filter((p: Player) => !soldPlayerIds.has(p.id));
+
+  if (remainingPlayers.length === 0) {
+    // Auction complete
+    await AuctionEngine.updateAuctionState({
+      status: 'finished',
+      current_player_id: null,
+      current_player_index: -1,
+    });
+
+    set({
+      currentPlayer: null,
+      currentPlayerIndex: -1,
+      status: 'finished',
+    });
+
+    return;
   }
 
-  if (nextPlayer) {
-    // Still players left in the original sequence — continue round 1
-    const newRoundCurrentIndex = state.roundCurrentIndex + 1;
+  // Check if we need to start re-auction round
+  const currentRoundPlayers =
+    state.currentRound === 1
+      ? state.allPlayers.filter((p: Player) => !soldPlayerIds.has(p.id) && !unsoldPlayerIds.has(p.id))
+      : state.allPlayers.filter((p: Player) => unsoldPlayerIds.has(p.id) && !soldPlayerIds.has(p.id));
+
+  if (currentRoundPlayers.length === 0) {
+    // Start new round with unsold players
+    const unsoldPlayers = state.allPlayers.filter((p: Player) => unsoldPlayerIds.has(p.id));
+
+    if (unsoldPlayers.length === 0) {
+      // No more players - finish
+      await AuctionEngine.updateAuctionState({
+        status: 'finished',
+        current_player_id: null,
+        current_player_index: -1,
+      });
+
+      set({
+        currentPlayer: null,
+        currentPlayerIndex: -1,
+        status: 'finished',
+      });
+
+      return;
+    }
+
+    // Start re-auction round
+    const nextPlayer = unsoldPlayers[0];
+    const newRound = state.currentRound + 1;
 
     set({
       currentPlayer: nextPlayer,
-      currentPlayerIndex: nextIndex,
-      roundCurrentIndex: newRoundCurrentIndex,
+      currentPlayerIndex: 0,
+      currentRound: newRound,
+      roundTotalPlayers: unsoldPlayers.length,
+      roundCurrentIndex: 1,
+      bidHistory: [],
+      currentHighestBid: null,
+      unsoldrPlayers: [],
+    });
+
+    await AuctionEngine.updateAuctionState({
+      status: 'countdown',
+      current_player_id: nextPlayer.id,
+      current_player_index: 0,
+      countdown: COUNTDOWN_DURATION,
+      current_round: newRound,
+      round_total_players: unsoldPlayers.length,
+      round_current_index: 1,
+      unsold_players: [],
+    });
+  } else {
+    // Continue current round
+    const nextPlayer = currentRoundPlayers[0];
+    const newIndex = state.currentPlayerIndex + 1;
+    const newRoundIndex = state.roundCurrentIndex + 1;
+
+    set({
+      currentPlayer: nextPlayer,
+      currentPlayerIndex: newIndex,
+      roundCurrentIndex: newRoundIndex,
       bidHistory: [],
       currentHighestBid: null,
     });
@@ -589,93 +605,9 @@ async function loadNextPlayer(get: any, set: any) {
     await AuctionEngine.updateAuctionState({
       status: 'countdown',
       current_player_id: nextPlayer.id,
-      current_player_index: nextIndex,
+      current_player_index: newIndex,
       countdown: COUNTDOWN_DURATION,
-      time_remaining: AUCTION_DURATION,
-      current_highest_bid_id: null,
-      round_current_index: newRoundCurrentIndex,
+      round_current_index: newRoundIndex,
     });
-    return;
   }
-
-  // ── STEP 2: original sequence done. Check unsold queue. ──
-  // Strip out any that got sold during a previous re-auction pass
-  const activeUnsold = unsoldList.filter((id: string) => !soldSet.has(id));
-
-  if (activeUnsold.length === 0) {
-    // Nothing left → auction finished
-    await AuctionEngine.updateAuctionState({
-      status: 'finished',
-      current_player_id: null,
-      current_player_index: -1,
-    });
-    set({ currentPlayer: null, currentPlayerIndex: -1, status: 'finished' });
-    return;
-  }
-
-  // ── STEP 3: pick the next unsold player ──
-  // Determine whether we start a brand-new re-auction round or continue one.
-  let newRound = state.currentRound;
-  let newRoundTotal = state.roundTotalPlayers;
-  let newRoundIndex: number;
-  let queueIndex: number;
-
-  const isNewRound =
-    state.currentRound === 1 ||                          // original sequence just ended
-    state.roundCurrentIndex >= state.roundTotalPlayers;  // current re-auction round done
-
-  if (isNewRound) {
-    newRound = state.currentRound + 1;
-    newRoundTotal = activeUnsold.length;
-    newRoundIndex = 1;
-    queueIndex = 0;
-  } else {
-    // Continue current re-auction round: advance to next item in activeUnsold
-    newRoundIndex = state.roundCurrentIndex + 1;
-    const currentIdx = activeUnsold.indexOf(state.currentPlayer?.id || '');
-    queueIndex = currentIdx + 1;
-
-    // Safety: if we somehow walked past the end, start a new round
-    if (queueIndex >= activeUnsold.length) {
-      newRound = state.currentRound + 1;
-      newRoundTotal = activeUnsold.length;
-      newRoundIndex = 1;
-      queueIndex = 0;
-    }
-  }
-
-  nextPlayer = state.allPlayers.find((p: Player) => p.id === activeUnsold[queueIndex]) || null;
-
-  if (!nextPlayer) {
-    // Safety net — should never happen
-    await AuctionEngine.updateAuctionState({ status: 'finished', current_player_id: null, current_player_index: -1 });
-    set({ currentPlayer: null, currentPlayerIndex: -1, status: 'finished' });
-    return;
-  }
-
-  nextIndex = state.allPlayers.findIndex((p: Player) => p.id === nextPlayer!.id);
-
-  set({
-    currentPlayer: nextPlayer,
-    currentPlayerIndex: nextIndex,
-    currentRound: newRound,
-    roundTotalPlayers: newRoundTotal,
-    roundCurrentIndex: newRoundIndex,
-    bidHistory: [],
-    currentHighestBid: null,
-    // unsoldrPlayers intentionally NOT cleared — must persist until players are sold
-  });
-
-  await AuctionEngine.updateAuctionState({
-    status: 'countdown',
-    current_player_id: nextPlayer.id,
-    current_player_index: nextIndex,
-    countdown: COUNTDOWN_DURATION,
-    time_remaining: AUCTION_DURATION,
-    current_highest_bid_id: null,
-    current_round: newRound,
-    round_total_players: newRoundTotal,
-    round_current_index: newRoundIndex,
-    // unsold_players left untouched in DB — endCurrentAuction manages it
-  });
 }
