@@ -2,8 +2,9 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
+import { AuthService } from '@/services/authService';
 import LoginPage from '@/components/LoginPage';
 import AuctionBoard from '@/components/AuctionBoard';
 import BidControls from '@/components/BidControls';
@@ -15,22 +16,49 @@ import AdminUserCards from '@/components/AdminUserCards';
 import ResultsView from '@/components/ResultsView';
 
 export default function Home() {
-  const { currentUserId, currentUserRole, status, login } = useAuctionStore();
-  // Local state: whether the user/spectator has dismissed the final-results modal.
-  // Resets to false automatically whenever status changes away from 'finished'
-  // (e.g. after an admin reset propagates via realtime).
-  const [resultsModalDismissed, setResultsModalDismissed] = useState(false);
+  const { currentUserId, currentUserRole, status, login, logout } = useAuctionStore();
+
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const savedId = sessionStorage.getItem('auction_user_id');
+      const savedRole = sessionStorage.getItem('auction_user_role');
+
+      if (savedId && savedRole) {
+        const user = await AuthService.getUserById(savedId);
+
+        if (user) {
+          await login(user.id, user.role);
+        } else {
+          sessionStorage.removeItem('auction_user_id');
+          sessionStorage.removeItem('auction_user_role');
+        }
+      }
+
+      setHydrated(true);
+    })();
+  }, []);
+
+  if (!hydrated) {
+    return null;
+  }
 
   if (!currentUserId || !currentUserRole) {
     return <LoginPage onLogin={login} />;
   }
 
-  // Determine whether the final-results modal should be visible.
-  // Conditions: auction is finished AND role is not ADMIN AND user hasn't dismissed it.
-  const showResultsModal =
-    status === 'finished' &&
-    currentUserRole !== 'ADMIN' &&
-    !resultsModalDismissed;
+  // Funcție pentru închiderea ResultsView
+  const handleCloseResults = () => {
+    // Poți să navighezi undeva sau să resetezi status
+    // De exemplu, resetează statusul în store:
+    // useAuctionStore.getState().resetAuction(); 
+    console.log('ResultsView closed');
+  };
+
+  if (status === 'finished') {
+    return <ResultsView onClose={handleCloseResults} />;
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
@@ -64,11 +92,6 @@ export default function Home() {
       </div>
 
       <ResultBanner />
-
-      {/* Final-results modal: USER / SPECTATOR only, dismissible, auto-closes on reset */}
-      {showResultsModal && (
-        <ResultsView onClose={() => setResultsModalDismissed(true)} />
-      )}
     </main>
   );
 }
