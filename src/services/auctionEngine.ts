@@ -1,191 +1,107 @@
 // src/services/auctionEngine.ts
 
-import { Player, User, Bid, AuctionStatus, PlayerWon } from '@/types/auction.types';
-import { supabase, SupabaseUser, SupabasePlayer } from '@/lib/supabase';
+import { Player, User, Bid, AuctionState, WonPlayer } from '@/types/auction.types';
+import { supabase } from '@/lib/supabase';
 
 export class AuctionEngine {
-  private timerInterval: NodeJS.Timeout | null = null;
-  private onTick: (() => void) | null = null;
-
-  /**
-   * Load users from Supabase
-   */
-  static async loadUsers(): Promise<User[]> {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('username', { ascending: true });
-
-      if (error) {
-        console.error('Supabase error loading users:', error);
-        throw error;
-      }
-
-      return (data as SupabaseUser[]).map((user) => ({
-        id: user.id,
-        username: user.username,
-        balance: user.balance,
-        isAdmin: user.is_admin,
-        wonPlayers: [],
-      }));
-    } catch (error) {
-      console.error('Error loading users:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Load players from Supabase
-   */
   static async loadPlayers(): Promise<Player[]> {
-    try {
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('Supabase error loading players:', error);
-        throw error;
-      }
-
-      return (data as SupabasePlayer[]).map((player) => ({
-        id: player.id,
-        name: player.name,
-        role: player.role,
-        rating: player.rating,
-        image: player.image,
-        basePrice: player.base_price,
-      }));
-    } catch (error) {
+    const { data, error } = await supabase.from('players').select('*');
+    
+    if (error) {
       console.error('Error loading players:', error);
       return [];
     }
+
+    return (data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      role: p.role,
+      rating: p.rating,
+      image: p.image,
+      basePrice: p.base_price,
+    }));
   }
 
-  /**
-   * Update user balance in Supabase
-   */
-  static async updateUserBalance(userId: string, newBalance: number): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ balance: newBalance })
-        .eq('id', userId);
-
-      if (error) {
-        console.error('Supabase error updating balance:', error);
-        throw error;
-      }
-      return true;
-    } catch (error) {
-      console.error('Error updating user balance:', error);
-      return false;
+  static async loadUsers(): Promise<User[]> {
+    const { data: usersData, error: usersError } = await supabase.from('users').select('*');
+    
+    if (usersError) {
+      console.error('Error loading users:', usersError);
+      return [];
     }
-  }
 
-  /**
-   * Save bid to Supabase
-   */
-  static async saveBid(playerId: string, userId: string, amount: number): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('bids')
-        .insert({
-          player_id: playerId,
-          user_id: userId,
-          amount: amount,
-        });
+    const { data: bidsData } = await supabase
+      .from('bids')
+      .select('*, players(id, name)')
+      .order('amount', { ascending: false });
 
-      if (error) {
-        console.error('Supabase error saving bid:', error);
-        throw error;
+    const winningBidsByPlayer: Record<string, { user_id: string; amount: number; player_name: string }> = {};
+
+    if (bidsData) {
+      for (const bid of bidsData) {
+        if (!winningBidsByPlayer[bid.player_id]) {
+          winningBidsByPlayer[bid.player_id] = {
+            user_id: bid.user_id,
+            amount: bid.amount,
+            player_name: (bid.players as any)?.name || 'Unknown Player',
+          };
+        }
       }
-      return true;
-    } catch (error) {
-      console.error('Error saving bid:', error);
-      return false;
     }
+
+    const userWonPlayersMap: Record<string, WonPlayer[]> = {};
+    
+    Object.entries(winningBidsByPlayer).forEach(([playerId, winData]) => {
+      if (!userWonPlayersMap[winData.user_id]) {
+        userWonPlayersMap[winData.user_id] = [];
+      }
+      userWonPlayersMap[winData.user_id].push({
+        playerId,
+        playerName: winData.player_name,
+        amount: winData.amount,
+      });
+    });
+
+    return (usersData || []).map((u: any) => ({
+      id: u.id,
+      username: u.username,
+      balance: u.balance,
+      isAdmin: u.is_admin,
+      wonPlayers: userWonPlayersMap[u.id] || [],
+    }));
   }
 
-  /**
-   * Reset auction in Supabase
-   */
-  static async resetAuction(): Promise<boolean> {
-    try {
-      const { error: bidsError } = await supabase
-        .from('bids')
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
-      if (bidsError) {
-        console.error('Supabase error deleting bids:', bidsError);
-        throw bidsError;
-      }
-
-      const { error: usersError } = await supabase
-        .from('users')
-        .update({ balance: 10000 })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
-      if (usersError) {
-        console.error('Supabase error resetting balances:', usersError);
-        throw usersError;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error resetting auction:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Validate if a bid can be placed
-   */
   static canPlaceBid(
     user: User | undefined,
     amount: number,
     currentHighestBid: Bid | null,
-    status: AuctionStatus
+    status: AuctionState['status']
   ): { valid: boolean; reason?: string } {
-    if (status !== 'active') {
-      return { valid: false, reason: 'Auction is not active' };
-    }
-
     if (!user) {
       return { valid: false, reason: 'User not found' };
+    }
+
+    if (status !== 'active') {
+      return { valid: false, reason: 'Auction is not active' };
     }
 
     if (amount > user.balance) {
       return { valid: false, reason: 'Insufficient balance' };
     }
 
-    if (user.balance === 0) {
-      return { valid: false, reason: 'Balance is zero' };
-    }
-
     const minBid = currentHighestBid ? currentHighestBid.amount + 1 : 0;
-    if (amount <= minBid) {
-      return { valid: false, reason: `Bid must be higher than ${minBid}` };
-    }
-
-    if (currentHighestBid && amount === currentHighestBid.amount) {
-      return { valid: false, reason: 'Bid amount already taken' };
+    if (amount < minBid) {
+      return { valid: false, reason: `Bid must be at least $${minBid}` };
     }
 
     return { valid: true };
   }
 
-  /**
-   * Process a bid
-   */
   static processBid(
     userId: string,
     username: string,
     amount: number,
-    timeRemaining: number
+    currentTimeRemaining: number
   ): { bid: Bid; newTimeRemaining: number } {
     const bid: Bid = {
       userId,
@@ -194,119 +110,158 @@ export class AuctionEngine {
       timestamp: Date.now(),
     };
 
-    let newTimeRemaining = timeRemaining;
-    if (timeRemaining <= 15) {
-      newTimeRemaining = timeRemaining + 10;
-    }
+    const newTimeRemaining = Math.max(currentTimeRemaining, 10);
 
     return { bid, newTimeRemaining };
   }
 
-  /**
-   * Deduct balance from winner and add player to their won list
-   */
+  static async saveBid(playerId: string, userId: string, amount: number): Promise<boolean> {
+    const { error } = await supabase.from('bids').insert({
+      player_id: playerId,
+      user_id: userId,
+      amount,
+    });
+
+    if (error) {
+      console.error('Error saving bid:', error);
+      return false;
+    }
+
+    return true;
+  }
+
+  static generateResultMessage(player: Player, winner: Bid | null): string {
+    if (winner) {
+      return `${player.name} SOLD to ${winner.username} for $${winner.amount.toLocaleString()}!`;
+    }
+    return `${player.name} UNSOLD`;
+  }
+
   static deductBalanceAndAddPlayer(
     users: User[],
     winnerId: string,
     amount: number,
     player: Player
   ): User[] {
-    return users.map((user) => {
-      if (user.id === winnerId) {
-        const playerWon: PlayerWon = {
+    return users.map((u) => {
+      if (u.id === winnerId) {
+        const wonPlayer: WonPlayer = {
           playerId: player.id,
           playerName: player.name,
-          amount: amount,
+          amount,
         };
         return {
-          ...user,
-          balance: user.balance - amount,
-          wonPlayers: [...user.wonPlayers, playerWon],
+          ...u,
+          balance: u.balance - amount,
+          wonPlayers: [...u.wonPlayers, wonPlayer],
         };
       }
-      return user;
+      return u;
     });
   }
 
-  /**
-   * Generate result message
-   */
-  static generateResultMessage(
-    player: Player,
-    winner: Bid | null
-  ): string {
-    if (!winner) {
-      return `No bids for ${player.name}. Player will be re-auctioned.`;
+  static async updateUserBalance(userId: string, newBalance: number): Promise<boolean> {
+    const { error } = await supabase
+      .from('users')
+      .update({ balance: newBalance })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('Error updating user balance:', error);
+      return false;
     }
-    return `${player.name} won by ${winner.username} for $${winner.amount.toLocaleString()}`;
+
+    return true;
   }
 
-  /**
-   * Get next player index, handling unsold players
-   */
   static getNextPlayerIndex(
     currentIndex: number,
     allPlayers: Player[],
     soldPlayers: string[],
     unsoldPlayers: string[]
   ): { nextIndex: number; isFinished: boolean } {
-    const totalPlayers = allPlayers.length;
-    const totalSold = soldPlayers.length;
-    const totalUnsold = unsoldPlayers.length;
+    const nextIndex = currentIndex + 1;
 
-    if (totalSold === totalPlayers) {
-      return { nextIndex: currentIndex, isFinished: true };
+    if (nextIndex >= allPlayers.length) {
+      return { nextIndex: -1, isFinished: true };
     }
 
-    if (currentIndex < totalPlayers - 1) {
-      return { nextIndex: currentIndex + 1, isFinished: false };
-    }
-
-    if (totalUnsold > 0) {
-      const firstUnsoldId = unsoldPlayers[0];
-      const unsoldIndex = allPlayers.findIndex((p) => p.id === firstUnsoldId);
-      return { nextIndex: unsoldIndex, isFinished: false };
-    }
-
-    return { nextIndex: currentIndex, isFinished: true };
+    return { nextIndex, isFinished: false };
   }
 
-  /**
-   * Start the auction timer
-   */
-  startTimer(tickCallback: () => void): void {
-    this.onTick = tickCallback;
-    this.timerInterval = setInterval(() => {
-      if (this.onTick) {
-        this.onTick();
+  static async resetAuction(): Promise<boolean> {
+    try {
+      // Delete all bids
+      await supabase.from('bids').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // Reset user balances
+      const { data: usersData } = await supabase.from('users').select('*');
+      if (usersData) {
+        for (const user of usersData) {
+          await supabase
+            .from('users')
+            .update({ balance: 10000 })
+            .eq('id', user.id);
+        }
       }
-    }, 1000);
-  }
 
-  /**
-   * Stop the auction timer
-   */
-  stopTimer(): void {
-    if (this.timerInterval) {
-      clearInterval(this.timerInterval);
-      this.timerInterval = null;
+      // Reset auction_state
+      const { data: auctionStateData } = await supabase
+        .from('auction_state')
+        .select('*')
+        .limit(1)
+        .single();
+
+      if (auctionStateData) {
+        await supabase
+          .from('auction_state')
+          .update({
+            status: 'idle',
+            current_player_id: null,
+            current_player_index: -1,
+            countdown: 3,
+            time_remaining: 30,
+            current_highest_bid_id: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', auctionStateData.id);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error resetting auction:', error);
+      return false;
     }
-    this.onTick = null;
-  }
-
-  /**
-   * Pause timer
-   */
-  pauseTimer(): void {
-    this.stopTimer();
-  }
-
-  /**
-   * Resume timer
-   */
-  resumeTimer(tickCallback: () => void): void {
-    this.startTimer(tickCallback);
   }
 }
 
-export const auctionEngine = new AuctionEngine();
+class AuctionTimerManager {
+  private timerId: NodeJS.Timeout | null = null;
+
+  startTimer(callback: () => void): void {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+    }
+    this.timerId = setInterval(callback, 1000);
+  }
+
+  pauseTimer(): void {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+  }
+
+  resumeTimer(callback: () => void): void {
+    this.startTimer(callback);
+  }
+
+  stopTimer(): void {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+      this.timerId = null;
+    }
+  }
+}
+
+export const auctionEngine = new AuctionTimerManager();
