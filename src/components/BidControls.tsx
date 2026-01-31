@@ -14,12 +14,12 @@ export default function BidControls() {
   const isActive = status === 'active';
   const canBid = currentUser && currentUser.balance > 0 && isActive;
 
-  const handlePresetBid = (increment: number) => {
+  const handlePresetBid = async (increment: number) => {
     const baseAmount = currentHighestBid ? currentHighestBid.amount : currentPlayer?.basePrice || 0;
     const bidAmount = baseAmount + increment;
     
     if (currentUser && bidAmount <= currentUser.balance) {
-      const success = placeBid(bidAmount);
+      const success = await placeBid(bidAmount);
       if (!success) {
         alert('Bid rejected. Check requirements.');
       }

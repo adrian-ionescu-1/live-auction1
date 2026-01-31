@@ -2,11 +2,19 @@
 
 'use client';
 
+import { useEffect } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import PlayerCard from './PlayerCard';
 
 export default function AuctionBoard() {
-  const { status, currentPlayer, countdown, timeRemaining } = useAuctionStore();
+  const { status, currentPlayer, countdown, timeRemaining, initializeRealtime, cleanupRealtime } = useAuctionStore();
+
+  useEffect(() => {
+    initializeRealtime();
+    return () => {
+      cleanupRealtime();
+    };
+  }, []);
 
   if (!currentPlayer) {
     return (
@@ -51,6 +59,19 @@ export default function AuctionBoard() {
           <div className="bg-yellow-500 text-white rounded-xl p-8 text-center shadow-lg">
             <p className="text-lg font-semibold mb-2">Auction Paused</p>
             <p className="text-3xl font-bold">⏸</p>
+          </div>
+        )}
+
+        {status === 'result' && (
+          <div className="bg-blue-500 text-white rounded-xl p-8 text-center shadow-lg">
+            <p className="text-lg font-semibold mb-2">Result</p>
+            <p className="text-xl">{useAuctionStore.getState().resultMessage}</p>
+          </div>
+        )}
+
+        {status === 'finished' && (
+          <div className="bg-purple-500 text-white rounded-xl p-8 text-center shadow-lg">
+            <p className="text-2xl font-bold">🎉 Auction Completed! 🎉</p>
           </div>
         )}
       </div>
