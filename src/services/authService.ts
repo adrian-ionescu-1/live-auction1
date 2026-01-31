@@ -1,11 +1,12 @@
 // src/services/authService.ts
+// MODIFIED VERSION FOR PERMANENT REUSABLE KEYS
 
 import { supabase, SupabaseAuthKey } from '@/lib/supabase';
 import { User, UserRole } from '@/types/auction.types';
 
 export class AuthService {
   /**
-   * Authenticate user with key
+   * Authenticate user with key (MODIFIED FOR REUSABLE KEYS)
    */
   static async authenticateWithKey(key: string): Promise<{ success: boolean; user?: User; error?: string }> {
     if (!key || key.trim() === '') {
@@ -26,26 +27,36 @@ export class AuthService {
 
       const typedAuthKey = authKey as SupabaseAuthKey;
 
-      // Check if key is already used
-      if (typedAuthKey.used) {
-        return { success: false, error: 'This key has already been used' };
+      // MODIFICATION: Check if user already exists with this key
+      const { data: existingUser, error: existingUserError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', typedAuthKey.user_name)
+        .maybeSingle();
+
+      // If user already exists, return the existing user (reusable login)
+      if (existingUser && !existingUserError) {
+        const user: User = {
+          id: existingUser.id,
+          username: existingUser.username,
+          balance: existingUser.balance,
+          role: existingUser.role as UserRole,
+          wonPlayers: [],
+        };
+
+        // Update the used_at timestamp to track last login
+        await supabase
+          .from('auth_keys')
+          .update({ 
+            used: true, 
+            used_at: new Date().toISOString() 
+          })
+          .eq('id', typedAuthKey.id);
+
+        return { success: true, user };
       }
 
-      // Mark key as used
-      const { error: updateError } = await supabase
-        .from('auth_keys')
-        .update({ 
-          used: true, 
-          used_at: new Date().toISOString() 
-        })
-        .eq('id', typedAuthKey.id);
-
-      if (updateError) {
-        console.error('Error marking key as used:', updateError);
-        return { success: false, error: 'Failed to authenticate' };
-      }
-
-      // Create user in users table
+      // User doesn't exist yet, create new user
       const initialBalance = typedAuthKey.role === 'USER' ? 10000 : 0;
       
       const { data: newUser, error: userError } = await supabase
@@ -63,6 +74,15 @@ export class AuthService {
         console.error('Error creating user:', userError);
         return { success: false, error: 'Failed to create user account' };
       }
+
+      // Mark key as used (but it's still reusable)
+      await supabase
+        .from('auth_keys')
+        .update({ 
+          used: true, 
+          used_at: new Date().toISOString() 
+        })
+        .eq('id', typedAuthKey.id);
 
       const user: User = {
         id: newUser.id,
