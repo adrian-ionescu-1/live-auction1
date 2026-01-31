@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { AuctionState, Player, User, Bid, WonPlayer } from '@/types/auction.types';
 import { supabase } from '@/lib/supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { AuctionEngine } from '@/services/auctionEngine';
 
 const COUNTDOWN_DURATION = 3;
 const AUCTION_DURATION = 30;
@@ -168,7 +169,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             currentHighestBid = null;
           }
 
-          // 🔥 CRITICAL FIX: Sync progress values from Supabase
           set({
             status: newState.status,
             currentPlayerIndex: newState.current_player_index,
@@ -177,13 +177,11 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             countdown: newState.countdown,
             currentHighestBid,
             bidHistory,
-            // 🔥 NEW: Progress tracking synchronized from database
             currentRound: newState.current_round || 1,
             roundTotalPlayers: newState.round_total_players || 0,
             roundCurrentIndex: newState.round_current_index || 0,
           });
 
-          // 🔥 CRITICAL FIX: Only start timer for admin users
           const currentUser = state.users.find(u => u.id === state.currentUserId);
           const isAdmin = currentUser?.isAdmin || false;
 
@@ -194,7 +192,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
               }, 1000);
             }
           } else {
-            // Non-admin users never run the timer
             if (timerInterval) {
               clearInterval(timerInterval);
               timerInterval = null;
@@ -241,7 +238,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
               timeRemaining: newTimeRemaining,
             });
 
-            // 🔥 CRITICAL FIX: Only admin updates the auction state time
             const currentUser = state.users.find(u => u.id === state.currentUserId);
             if (currentUser?.isAdmin) {
               const { data: auctionStateData } = await supabase
@@ -317,8 +313,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     }
 
     const firstPlayer = players[0];
-
-    // 🔥 CRITICAL FIX: Set initial progress values
     const initialRoundTotalPlayers = players.length;
 
     set({
@@ -339,7 +333,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       .single();
 
     if (auctionStateData) {
-      // 🔥 CRITICAL FIX: Initialize progress values in database
       await supabase
         .from('auction_state')
         .update({
@@ -564,7 +557,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       .single();
 
     if (auctionStateData) {
-      // 🔥 CRITICAL FIX: Reset progress values in database
       await supabase
         .from('auction_state')
         .update({
@@ -627,45 +619,20 @@ async function endCurrentAuction(get: any, set: any) {
     if (user) {
       const newBalance = user.balance - winner.amount;
       
-      console.log('💰 [BUDGET FIX] Updating user balance:', {
-        userId: user.id,
-        username: user.username,
-        oldBalance: user.balance,
-        bidAmount: winner.amount,
-        newBalance: newBalance,
-        playerId: player.id,
-        playerName: player.name
-      });
-      
-      // 🔥 CRITICAL BUDGET FIX: Update database with error checking
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('users')
         .update({ balance: newBalance })
-        .eq('id', user.id)
-        .select();
+        .eq('id', user.id);
       
       if (error) {
-        console.error('❌ [BUDGET FIX] Failed to update user balance in database:', error);
-        alert(`Critical Error: Failed to update balance for ${user.username}. Please contact admin.`);
-        return; // Don't proceed if database update failed
+        console.error('Failed to update user balance:', error);
+        return;
       }
       
-      console.log('✅ [BUDGET FIX] Database update successful:', data);
+      await new Promise(resolve => setTimeout(resolve, 200));
       
-      // 🔥 CRITICAL BUDGET FIX: Wait for database transaction to commit
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // 🔥 CRITICAL BUDGET FIX: Reload users from database (single source of truth)
       const freshUsers = await loadUsersWithWonPlayers();
-      
-      console.log('🔄 [BUDGET FIX] Reloaded users from database. Updated balances:', 
-        freshUsers.map(u => ({ username: u.username, balance: u.balance }))
-      );
-      
-      // Update local state with fresh database data
       set({ users: freshUsers });
-      
-      console.log('✅ [BUDGET FIX] Balance update complete and synchronized');
     }
   } else {
     resultMessage += 'UNSOLD - will re-auction';
@@ -788,7 +755,6 @@ async function loadNextPlayer(get: any, set: any) {
     return;
   }
 
-  // 🔥 CRITICAL FIX: Calculate progress values
   let newRoundCurrentIndex = state.roundCurrentIndex + 1;
   let newRound = state.currentRound;
   let newRoundTotalPlayers = state.roundTotalPlayers;
@@ -805,7 +771,6 @@ async function loadNextPlayer(get: any, set: any) {
     newRoundCurrentIndex = 1;
   }
 
-  // Update local state
   set({
     bidHistory: [],
     currentHighestBid: null,
@@ -821,7 +786,6 @@ async function loadNextPlayer(get: any, set: any) {
     .single();
 
   if (auctionStateData) {
-    // 🔥 CRITICAL FIX: Save progress values to database for ALL clients
     await supabase
       .from('auction_state')
       .update({
@@ -839,6 +803,3 @@ async function loadNextPlayer(get: any, set: any) {
       .eq('id', auctionStateData.id);
   }
 }
-
-// Import AuctionEngine for loadPlayers
-import { AuctionEngine } from '@/services/auctionEngine';
