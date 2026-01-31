@@ -387,6 +387,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       currentRound: 1,
       roundTotalPlayers: players.length,
       roundCurrentIndex: 1,
+      resultMessage: null,
     });
 
     const { data: auctionStateData } = await supabase
