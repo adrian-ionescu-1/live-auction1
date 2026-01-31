@@ -34,9 +34,17 @@ export class AuctionEngine {
   }
 
   /**
-   * Load all users with their won players
+   * Load all users with their won players.
+   *
+   * FIX #1 (wonPlayers): accepts `soldPlayers` — only players whose ID appears
+   * in this array are treated as "won". Previously, every player that had ANY bid
+   * in the bids table was counted as won. This meant players currently being
+   * auctioned (or ones that went unsold) showed up as won, and their bids were
+   * deducted from the wrong user's balance on reload.
+   *
+   * @param soldPlayerIds - IDs of players confirmed sold. Pass [] if none are sold yet.
    */
-  static async loadUsers(): Promise<User[]> {
+  static async loadUsers(soldPlayerIds: string[] = []): Promise<User[]> {
     try {
       const { data: usersData, error: usersError } = await supabase
         .from('users')
@@ -48,36 +56,41 @@ export class AuctionEngine {
         return [];
       }
 
+      // Build a set for O(1) lookups
+      const soldSet = new Set(soldPlayerIds);
+
       // Get all bids with player information
       const { data: bidsData } = await supabase
         .from('bids')
         .select('*, players(id, name)')
         .order('created_at', { ascending: true });
 
-      // Determine winning bids for each player (highest bid wins)
+      // Determine winning bids — but ONLY for players that are actually sold.
       const winningBidsByPlayer: Record<string, { user_id: string; amount: number; player_name: string }> = {};
 
       if (bidsData) {
-        const playerIds = new Set<string>();
+        const processedPlayers = new Set<string>();
 
         for (const bid of bidsData) {
-          if (!playerIds.has(bid.player_id)) {
-            // Get all bids for this player
-            const allBidsForPlayer = bidsData.filter((b: any) => b.player_id === bid.player_id);
-            
-            // Find the highest bid
-            const highestBid = allBidsForPlayer.reduce((max: any, current: any) =>
-              current.amount > max.amount ? current : max
-            );
+          if (processedPlayers.has(bid.player_id)) continue;
+          processedPlayers.add(bid.player_id);
 
-            winningBidsByPlayer[bid.player_id] = {
-              user_id: highestBid.user_id,
-              amount: highestBid.amount,
-              player_name: (highestBid.players as any)?.name || 'Unknown Player',
-            };
+          // ── KEY FIX: skip any player not in the sold set ──
+          // Bids for players currently being auctioned or that went unsold
+          // must NOT be counted as wins.
+          if (!soldSet.has(bid.player_id)) continue;
 
-            playerIds.add(bid.player_id);
-          }
+          const allBidsForPlayer = bidsData.filter((b: any) => b.player_id === bid.player_id);
+
+          const highestBid = allBidsForPlayer.reduce((max: any, current: any) =>
+            current.amount > max.amount ? current : max
+          );
+
+          winningBidsByPlayer[bid.player_id] = {
+            user_id: highestBid.user_id,
+            amount: highestBid.amount,
+            player_name: (highestBid.players as any)?.name || 'Unknown Player',
+          };
         }
       }
 
@@ -95,7 +108,7 @@ export class AuctionEngine {
         });
       });
 
-      // Build user objects
+      // Build user objects — balance comes from DB (source of truth)
       return (usersData || []).map((u: any) => ({
         id: u.id,
         username: u.username,
@@ -210,14 +223,25 @@ export class AuctionEngine {
   }
 
   /**
-   * Reset entire auction to initial state
+   * Reset entire auction to initial state.
+   *
+   * FIX #3 (ordering): auction_state is written LAST. This is critical:
+   *   1. Delete all bids first (so loadUsers won't find stale won-player data).
+   *   2. Reset all USER balances to 10000.
+   *   3. Write auction_state → status = 'idle'.
+   *
+   * Step 3 fires the realtime event. By that point steps 1-2 are already
+   * committed, so any client that reloads users in response to 'idle' will
+   * get clean data. Previously these happened in the same order but the
+   * realtime handler on other clients didn't reload users at all — that's
+   * fixed in auctionStore.
    */
   static async resetAuction(): Promise<boolean> {
     try {
-      // Delete all bids
+      // 1. Delete all bids
       await supabase.from('bids').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-      // Reset all USER balances to 10000 (don't touch ADMIN or SPECTATOR)
+      // 2. Reset all USER balances to 10000
       const { data: users } = await supabase.from('users').select('*');
       if (users) {
         for (const user of users) {
@@ -227,7 +251,7 @@ export class AuctionEngine {
         }
       }
 
-      // Reset auction state to initial values
+      // 3. Reset auction state LAST — this triggers the realtime event
       await this.updateAuctionState({
         status: 'idle',
         current_player_id: null,
