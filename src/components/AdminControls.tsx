@@ -7,14 +7,10 @@ import { useAuctionStore } from '@/store/auctionStore';
 import ConfirmDialog from './ConfirmDialog';
 
 export default function AdminControls() {
-  const { currentUserId, users, status, startAuction, pauseAuction, resumeAuction, reset } =
-    useAuctionStore();
+  const { currentUserRole, status, startAuction, pauseAuction, resumeAuction, reset } = useAuctionStore();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
-  const currentUser = users.find((u) => u.id === currentUserId);
-  const isAdmin = currentUser?.isAdmin || false;
-
-  if (!isAdmin) {
+  if (currentUserRole !== 'ADMIN') {
     return null;
   }
 
@@ -40,7 +36,6 @@ export default function AdminControls() {
         </div>
 
         <div className="space-y-3">
-          {/* Start Auction */}
           {status === 'idle' && (
             <button
               onClick={startAuction}
@@ -50,7 +45,6 @@ export default function AdminControls() {
             </button>
           )}
 
-          {/* Pause/Resume */}
           {status === 'active' && (
             <button
               onClick={pauseAuction}
@@ -69,7 +63,6 @@ export default function AdminControls() {
             </button>
           )}
 
-          {/* Reset - Always Visible */}
           <button
             onClick={handleResetClick}
             className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg"
@@ -77,7 +70,6 @@ export default function AdminControls() {
             🔄 Reset Auction
           </button>
 
-          {/* Status Indicator */}
           <div className="bg-white bg-opacity-20 rounded-lg p-3">
             <p className="text-white text-sm text-center">
               Status: <span className="font-bold uppercase">{status}</span>
@@ -86,7 +78,6 @@ export default function AdminControls() {
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
       <ConfirmDialog
         isOpen={showResetConfirm}
         title="Reset Auction"

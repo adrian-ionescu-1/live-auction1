@@ -7,16 +7,16 @@ import { useAuctionStore } from '@/store/auctionStore';
 import PlayerCard from './PlayerCard';
 
 export default function AuctionBoard() {
-  const { 
-    status, 
-    currentPlayer, 
-    countdown, 
-    timeRemaining, 
+  const {
+    status,
+    currentPlayer,
+    countdown,
+    timeRemaining,
     currentRound,
     roundTotalPlayers,
     roundCurrentIndex,
-    initializeRealtime, 
-    cleanupRealtime 
+    initializeRealtime,
+    cleanupRealtime,
   } = useAuctionStore();
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function AuctionBoard() {
     return () => {
       cleanupRealtime();
     };
-  }, []);
+  }, [initializeRealtime, cleanupRealtime]);
 
   if (!currentPlayer) {
     return (
@@ -33,9 +33,7 @@ export default function AuctionBoard() {
           <h2 className="text-3xl font-bold text-gray-700 mb-4">
             {status === 'idle' ? 'Waiting for auction to start...' : 'Loading...'}
           </h2>
-          {status === 'idle' && (
-            <p className="text-gray-500">Admin will start the auction soon</p>
-          )}
+          {status === 'idle' && <p className="text-gray-500">Admin will start the auction soon</p>}
         </div>
       </div>
     );
@@ -43,7 +41,6 @@ export default function AuctionBoard() {
 
   return (
     <div className="flex flex-col items-center gap-6">
-      {/* Countdown or Timer */}
       <div className="w-full max-w-md">
         {status === 'countdown' && countdown > 0 && (
           <div className="bg-yellow-400 text-gray-900 rounded-xl p-8 text-center shadow-lg">
@@ -53,13 +50,15 @@ export default function AuctionBoard() {
         )}
 
         {status === 'active' && (
-          <div className={`rounded-xl p-8 text-center shadow-lg ${
-            timeRemaining <= 10
-              ? 'bg-red-500 text-white animate-pulse'
-              : timeRemaining <= 15
-              ? 'bg-orange-500 text-white'
-              : 'bg-green-500 text-white'
-          }`}>
+          <div
+            className={`rounded-xl p-8 text-center shadow-lg ${
+              timeRemaining <= 10
+                ? 'bg-red-500 text-white animate-pulse'
+                : timeRemaining <= 15
+                ? 'bg-orange-500 text-white'
+                : 'bg-green-500 text-white'
+            }`}
+          >
             <p className="text-lg font-semibold mb-2">Time Remaining</p>
             <p className="text-7xl font-bold">{timeRemaining}s</p>
           </div>
@@ -78,23 +77,13 @@ export default function AuctionBoard() {
             <p className="text-xl">{useAuctionStore.getState().resultMessage}</p>
           </div>
         )}
-
-        {status === 'finished' && (
-          <div className="bg-purple-500 text-white rounded-xl p-8 text-center shadow-lg">
-            <p className="text-2xl font-bold">🎉 Auction Completed! 🎉</p>
-          </div>
-        )}
       </div>
 
-      {/* Player Card */}
       <PlayerCard player={currentPlayer} />
 
-      {/* Round-based Progress */}
       <div className="w-full max-w-md bg-white rounded-lg p-4 shadow">
         <div className="flex justify-between text-sm text-gray-600 mb-2">
-          <span>
-            {currentRound === 1 ? 'Initial Auction' : `Re-auction Round ${currentRound - 1}`}
-          </span>
+          <span>{currentRound === 1 ? 'Initial Auction' : `Re-auction Round ${currentRound - 1}`}</span>
           <span>
             Player {roundCurrentIndex} of {roundTotalPlayers}
           </span>
@@ -107,11 +96,7 @@ export default function AuctionBoard() {
             }}
           ></div>
         </div>
-        {currentRound > 1 && (
-          <p className="text-xs text-gray-500 mt-2 text-center">
-            Auctioning unsold players
-          </p>
-        )}
+        {currentRound > 1 && <p className="text-xs text-gray-500 mt-2 text-center">Auctioning unsold players</p>}
       </div>
     </div>
   );

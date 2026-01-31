@@ -1,10 +1,12 @@
 // src/types/auction.types.ts
 
+export type UserRole = 'ADMIN' | 'USER' | 'SPECTATOR';
+
 export interface User {
   id: string;
   username: string;
   balance: number;
-  isAdmin: boolean;
+  role: UserRole;
   wonPlayers: WonPlayer[];
 }
 
@@ -30,22 +32,23 @@ export interface Bid {
   timestamp: number;
 }
 
+export type AuctionStatus = 'idle' | 'countdown' | 'active' | 'paused' | 'result' | 'finished';
+
 export interface AuctionState {
   users: User[];
   currentUserId: string | null;
+  currentUserRole: UserRole | null;
   allPlayers: Player[];
   currentPlayerIndex: number;
   currentPlayer: Player | null;
   soldPlayers: string[];
   unsoldrPlayers: string[];
-  status: 'idle' | 'countdown' | 'active' | 'paused' | 'result' | 'finished';
+  status: AuctionStatus;
   countdown: number;
   timeRemaining: number;
   currentHighestBid: Bid | null;
   bidHistory: Bid[];
   resultMessage: string | null;
-  
-  // Round-based progress tracking
   currentRound: number;
   roundTotalPlayers: number;
   roundCurrentIndex: number;
