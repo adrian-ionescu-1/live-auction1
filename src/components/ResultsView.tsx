@@ -5,9 +5,13 @@
 import { useAuctionStore } from '@/store/auctionStore';
 
 export default function ResultsView() {
-  const { users, currentUserRole } = useAuctionStore();
+  const { users, currentUserRole, reset } = useAuctionStore();
 
   const regularUsers = users.filter((u) => u.role === 'USER');
+
+  const handleStartNewAuction = async () => {
+    await reset();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
@@ -79,7 +83,7 @@ export default function ResultsView() {
           {currentUserRole === 'ADMIN' && (
             <div className="mt-12 text-center">
               <button
-                onClick={() => window.location.reload()}
+                onClick={handleStartNewAuction}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-8 rounded-lg transition shadow-lg text-lg"
               >
                 Start New Auction
