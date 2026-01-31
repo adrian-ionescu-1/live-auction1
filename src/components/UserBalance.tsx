@@ -5,7 +5,7 @@
 import { useAuctionStore } from '@/store/auctionStore';
 
 export default function UserBalance() {
-  const { currentUserId, users, selectUser } = useAuctionStore();
+  const { currentUserId, users, logout } = useAuctionStore();
 
   const currentUser = users.find((u) => u.id === currentUserId);
 
@@ -14,7 +14,7 @@ export default function UserBalance() {
   }
 
   const handleLogout = () => {
-    selectUser('');
+    logout();
   };
 
   return (
@@ -22,7 +22,7 @@ export default function UserBalance() {
       <div>
         <p className="text-sm text-gray-600">Logged in as</p>
         <p className="text-xl font-bold text-gray-900">{currentUser.username}</p>
-        {currentUser.isAdmin && (
+        {currentUser.role === 'ADMIN' && (
           <span className="bg-yellow-400 text-gray-900 text-xs font-bold px-2 py-1 rounded-full">
             ADMIN
           </span>
