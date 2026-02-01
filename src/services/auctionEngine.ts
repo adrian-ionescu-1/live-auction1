@@ -32,7 +32,12 @@ export class AuctionEngine {
 
   /**
    * Load all users with their wonPlayers calculated based on sold players
-   * @param soldPlayerIds - Optional array of player IDs that have been sold
+   * @param soldPlayerIds - Array of player IDs that have been sold (optional, defaults to empty array)
+   * @returns Promise<User[]> - Array of users with their wonPlayers populated
+   * 
+   * When soldPlayerIds is provided and not empty, wonPlayers will only include players
+   * from that list. When empty or not provided, wonPlayers will include all players
+   * with bids (useful for initial load or reset scenarios).
    */
   static async loadUsers(soldPlayerIds: string[] = []): Promise<User[]> {
     try {
@@ -46,25 +51,19 @@ export class AuctionEngine {
         return [];
       }
 
-      // Only fetch bids for sold players if soldPlayerIds is provided
-      let bidsData: any[] = [];
+      // Fetch bids - if soldPlayerIds is provided and not empty, filter by those players
+      let bidsQuery = supabase
+        .from('bids')
+        .select('*, players(id, name)')
+        .order('created_at', { ascending: true });
+
+      // Only filter by soldPlayerIds if the array is not empty
+      // Empty array means we want all bids (e.g., during initial load or reset)
       if (soldPlayerIds.length > 0) {
-        const { data } = await supabase
-          .from('bids')
-          .select('*, players(id, name)')
-          .in('player_id', soldPlayerIds)
-          .order('created_at', { ascending: true });
-        
-        bidsData = data || [];
-      } else {
-        // If no soldPlayerIds, fetch all bids
-        const { data } = await supabase
-          .from('bids')
-          .select('*, players(id, name)')
-          .order('created_at', { ascending: true });
-        
-        bidsData = data || [];
+        bidsQuery = bidsQuery.in('player_id', soldPlayerIds);
       }
+
+      const { data: bidsData } = await bidsQuery;
 
       const winningBidsByPlayer: Record<string, { user_id: string; amount: number; player_name: string }> = {};
 
@@ -240,7 +239,7 @@ export class AuctionEngine {
 
   /**
    * RPC: Place a bid for a player
-   * This handles all validation and timer extension logic server-side
+   * Calls the Supabase place_bid RPC function which handles validation and timer extension
    */
   static async placeBidRpc(
     playerId: string,
@@ -248,6 +247,13 @@ export class AuctionEngine {
     amount: number
   ): Promise<{ success: boolean; error: string | null }> {
     try {
+      if (!playerId || !userId || !amount || amount <= 0) {
+        return { 
+          success: false, 
+          error: 'Invalid parameters: playerId, userId, and amount are required' 
+        };
+      }
+
       const { data, error } = await supabase.rpc('place_bid', {
         p_player_id: playerId,
         p_user_id: userId,
@@ -259,6 +265,13 @@ export class AuctionEngine {
         return { success: false, error: error.message };
       }
 
+      if (data && typeof data === 'object') {
+        return {
+          success: data.success === true,
+          error: data.error || null,
+        };
+      }
+
       return { success: true, error: null };
     } catch (error: any) {
       console.error('Error in placeBidRpc:', error);
@@ -268,12 +281,16 @@ export class AuctionEngine {
 
   /**
    * RPC: Extend auction time
-   * This adds seconds to the current time_remaining
+   * Adds seconds to the current time_remaining
    */
   static async extendAuctionTimeRpc(
     seconds: number
   ): Promise<{ success: boolean; error: string | null }> {
     try {
+      if (!seconds || seconds <= 0) {
+        return { success: false, error: 'Invalid seconds parameter' };
+      }
+
       const { data, error } = await supabase.rpc('extend_auction_time', {
         p_seconds: seconds,
       });
@@ -281,6 +298,13 @@ export class AuctionEngine {
       if (error) {
         console.error('extend_auction_time RPC error:', error);
         return { success: false, error: error.message };
+      }
+
+      if (data && typeof data === 'object') {
+        return {
+          success: data.success === true,
+          error: data.error || null,
+        };
       }
 
       return { success: true, error: null };
@@ -292,7 +316,7 @@ export class AuctionEngine {
 
   /**
    * RPC: Settle the current player
-   * This determines the winner, updates balances, and transitions to result state
+   * Determines the winner, updates balances, and transitions to result state
    */
   static async settlePlayerRpc(
     playerId: string
@@ -303,6 +327,18 @@ export class AuctionEngine {
     winning_amount: number | null;
   }> {
     try {
+      if (!playerId) {
+        console.error('settlePlayerRpc: playerId is required');
+        return {
+          success: false,
+          error: 'Player ID is required',
+          winner_user_id: null,
+          winning_amount: null,
+        };
+      }
+
+      console.log('Calling settle_player RPC for player:', playerId);
+
       const { data, error } = await supabase.rpc('settle_player', {
         p_player_id: playerId,
       });
@@ -317,11 +353,20 @@ export class AuctionEngine {
         };
       }
 
+      if (data && typeof data === 'object') {
+        return {
+          success: data.success === true,
+          error: data.error || null,
+          winner_user_id: data.winner_user_id || null,
+          winning_amount: data.winning_amount ? Number(data.winning_amount) : null,
+        };
+      }
+
       return {
-        success: true,
-        error: null,
-        winner_user_id: data?.winner_user_id || null,
-        winning_amount: data?.winning_amount || null,
+        success: false,
+        error: 'Unexpected response format from settle_player RPC',
+        winner_user_id: null,
+        winning_amount: null,
       };
     } catch (error: any) {
       console.error('Error in settlePlayerRpc:', error);
