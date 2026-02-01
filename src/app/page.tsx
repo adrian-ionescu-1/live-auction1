@@ -16,7 +16,7 @@ import AdminUserCards from '@/components/AdminUserCards';
 import ResultsView from '@/components/ResultsView';
 
 export default function Home() {
-  const { currentUserId, currentUserRole, status, login, logout } = useAuctionStore();
+  const { currentUserId, currentUserRole, status, login, dismissResults } = useAuctionStore();
 
   const [hydrated, setHydrated] = useState(false);
 
@@ -38,7 +38,7 @@ export default function Home() {
 
       setHydrated(true);
     })();
-  }, []);
+  }, [login]);
 
   if (!hydrated) {
     return null;
@@ -48,15 +48,11 @@ export default function Home() {
     return <LoginPage onLogin={login} />;
   }
 
-  // Funcție pentru închiderea ResultsView
   const handleCloseResults = () => {
-    // Poți să navighezi undeva sau să resetezi status
-    // De exemplu, resetează statusul în store:
-    // useAuctionStore.getState().resetAuction(); 
-    console.log('ResultsView closed');
+    dismissResults();
   };
 
-  if (status === 'finished') {
+  if (status === 'finished' && currentUserRole !== 'ADMIN') {
     return <ResultsView onClose={handleCloseResults} />;
   }
 
