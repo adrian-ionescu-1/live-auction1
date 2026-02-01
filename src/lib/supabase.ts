@@ -29,9 +29,9 @@ export interface SupabaseUser {
 export interface SupabasePlayer {
   id: string;
   name: string;
-  role: string;
-  rating: number;
-  image: string;
+  wn8_30d: number;
+  winrate: number;
+  avg_damage: number;
   base_price: number;
   created_at: string;
 }
