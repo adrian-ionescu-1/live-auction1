@@ -30,7 +30,11 @@ export class AuctionEngine {
     }
   }
 
-  static async loadUsers(): Promise<User[]> {
+  /**
+   * Load all users with their wonPlayers calculated based on sold players
+   * @param soldPlayerIds - Optional array of player IDs that have been sold
+   */
+  static async loadUsers(soldPlayerIds: string[] = []): Promise<User[]> {
     try {
       const { data: usersData, error: usersError } = await supabase
         .from('users')
@@ -42,14 +46,29 @@ export class AuctionEngine {
         return [];
       }
 
-      const { data: bidsData } = await supabase
-        .from('bids')
-        .select('*, players(id, name)')
-        .order('created_at', { ascending: true });
+      // Only fetch bids for sold players if soldPlayerIds is provided
+      let bidsData: any[] = [];
+      if (soldPlayerIds.length > 0) {
+        const { data } = await supabase
+          .from('bids')
+          .select('*, players(id, name)')
+          .in('player_id', soldPlayerIds)
+          .order('created_at', { ascending: true });
+        
+        bidsData = data || [];
+      } else {
+        // If no soldPlayerIds, fetch all bids
+        const { data } = await supabase
+          .from('bids')
+          .select('*, players(id, name)')
+          .order('created_at', { ascending: true });
+        
+        bidsData = data || [];
+      }
 
       const winningBidsByPlayer: Record<string, { user_id: string; amount: number; player_name: string }> = {};
 
-      if (bidsData) {
+      if (bidsData && bidsData.length > 0) {
         const playerIds = new Set<string>();
 
         for (const bid of bidsData) {
@@ -216,6 +235,102 @@ export class AuctionEngine {
     } catch (error) {
       console.error('Error resetting auction:', error);
       return false;
+    }
+  }
+
+  /**
+   * RPC: Place a bid for a player
+   * This handles all validation and timer extension logic server-side
+   */
+  static async placeBidRpc(
+    playerId: string,
+    userId: string,
+    amount: number
+  ): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const { data, error } = await supabase.rpc('place_bid', {
+        p_player_id: playerId,
+        p_user_id: userId,
+        p_amount: amount,
+      });
+
+      if (error) {
+        console.error('place_bid RPC error:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, error: null };
+    } catch (error: any) {
+      console.error('Error in placeBidRpc:', error);
+      return { success: false, error: error.message || 'Failed to place bid' };
+    }
+  }
+
+  /**
+   * RPC: Extend auction time
+   * This adds seconds to the current time_remaining
+   */
+  static async extendAuctionTimeRpc(
+    seconds: number
+  ): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const { data, error } = await supabase.rpc('extend_auction_time', {
+        p_seconds: seconds,
+      });
+
+      if (error) {
+        console.error('extend_auction_time RPC error:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, error: null };
+    } catch (error: any) {
+      console.error('Error in extendAuctionTimeRpc:', error);
+      return { success: false, error: error.message || 'Failed to extend time' };
+    }
+  }
+
+  /**
+   * RPC: Settle the current player
+   * This determines the winner, updates balances, and transitions to result state
+   */
+  static async settlePlayerRpc(
+    playerId: string
+  ): Promise<{
+    success: boolean;
+    error: string | null;
+    winner_user_id: string | null;
+    winning_amount: number | null;
+  }> {
+    try {
+      const { data, error } = await supabase.rpc('settle_player', {
+        p_player_id: playerId,
+      });
+
+      if (error) {
+        console.error('settle_player RPC error:', error);
+        return {
+          success: false,
+          error: error.message,
+          winner_user_id: null,
+          winning_amount: null,
+        };
+      }
+
+      return {
+        success: true,
+        error: null,
+        winner_user_id: data?.winner_user_id || null,
+        winning_amount: data?.winning_amount || null,
+      };
+    } catch (error: any) {
+      console.error('Error in settlePlayerRpc:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to settle player',
+        winner_user_id: null,
+        winning_amount: null,
+      };
     }
   }
 }
