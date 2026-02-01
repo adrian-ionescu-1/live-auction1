@@ -19,9 +19,9 @@ export interface WonPlayer {
 export interface Player {
   id: string;
   name: string;
-  role: string;
-  rating: number;
-  image: string;
+  wn8_30d: number;
+  winrate: number;
+  avg_damage: number;
   basePrice: number;
 }
 

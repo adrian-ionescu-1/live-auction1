@@ -1,42 +1,42 @@
 [
   {
-    "id": "p1",
-    "name": "Cristiano Ronaldo",
-    "role": "Forward",
-    "rating": 91,
-    "image": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=400&h=400&fit=crop",
+    "id": "player1",
+    "name": "_ThE_Adrian_One_",
+    "wn8_30d": 9245,
+    "winrate": 63.4,
+    "avg_damage": 2420,
     "basePrice": 100
   },
   {
-    "id": "p2",
-    "name": "Kevin De Bruyne",
-    "role": "Midfielder",
-    "rating": 90,
-    "image": "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=400&h=400&fit=crop",
+    "id": "player2",
+    "name": "Akeron",
+    "wn8_30d": 7890,
+    "winrate": 57.2,
+    "avg_damage": 1980,
     "basePrice": 100
   },
   {
-    "id": "p3",
-    "name": "Virgil van Dijk",
-    "role": "Defender",
-    "rating": 89,
-    "image": "https://images.unsplash.com/photo-1606925797300-0b35e9d1794e?w=400&h=400&fit=crop",
+    "id": "player3",
+    "name": "C1iP",
+    "wn8_30d": 8520,
+    "winrate": 60.0,
+    "avg_damage": 2200,
     "basePrice": 100
   },
   {
-    "id": "p4",
-    "name": "Alisson Becker",
-    "role": "Goalkeeper",
-    "rating": 88,
-    "image": "https://images.unsplash.com/photo-1575361204480-aadea25e6e68?w=400&h=400&fit=crop",
+    "id": "player4",
+    "name": "Alina_Firsova",
+    "wn8_30d": 6875,
+    "winrate": 54.5,
+    "avg_damage": 1720,
     "basePrice": 100
   },
   {
-    "id": "p5",
-    "name": "Erling Haaland",
-    "role": "Forward",
-    "rating": 92,
-    "image": "https://images.unsplash.com/photo-1614632537197-38a17061c2bd?w=400&h=400&fit=crop",
+    "id": "player5",
+    "name": "jack_honey",
+    "wn8_30d": 7945,
+    "winrate": 58.5,
+    "avg_damage": 2045,
     "basePrice": 100
   }
 ]
