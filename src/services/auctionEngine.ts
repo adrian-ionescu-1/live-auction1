@@ -1,11 +1,23 @@
 // src/services/auctionEngine.ts
+//
+// All mutation of auction state goes through Supabase RPC functions.
+// This file contains NO direct INSERT/UPDATE of bids, users, or
+// auction_state (except the bulk operations in resetAuction which
+// are admin-only and sequential-by-design).
+//
+// RPCs guarantee atomicity via PostgreSQL transactions:
+//   place_bid          — validates + inserts bid + resets timer
+//   settle_player      — finds winner, decrements balance, marks sold/unsold
+//   extend_auction_time — adds seconds to time_remaining
 
-import { Player, User, Bid, WonPlayer } from '@/types/auction.types';
+import { Player, User, WonPlayer } from '@/types/auction.types';
 import { supabase } from '@/lib/supabase';
 
 export class AuctionEngine {
+  // ─── READ OPERATIONS ──────────────────────────────────────────
+
   /**
-   * Load all players from database
+   * Load all players from database, ordered by creation time.
    */
   static async loadPlayers(): Promise<Player[]> {
     try {
@@ -25,7 +37,7 @@ export class AuctionEngine {
         role: p.role,
         rating: p.rating,
         image: p.image,
-        basePrice: p.base_price,
+        basePrice: Number(p.base_price),
       }));
     } catch (error) {
       console.error('Error in loadPlayers:', error);
@@ -36,13 +48,9 @@ export class AuctionEngine {
   /**
    * Load all users with their won players.
    *
-   * FIX #1 (wonPlayers): accepts `soldPlayers` — only players whose ID appears
-   * in this array are treated as "won". Previously, every player that had ANY bid
-   * in the bids table was counted as won. This meant players currently being
-   * auctioned (or ones that went unsold) showed up as won, and their bids were
-   * deducted from the wrong user's balance on reload.
-   *
-   * @param soldPlayerIds - IDs of players confirmed sold. Pass [] if none are sold yet.
+   * @param soldPlayerIds — only players in this array are treated as won.
+   *   Pass the sold_players array from auction_state. Bids on players
+   *   that are still being auctioned or went unsold are ignored.
    */
   static async loadUsers(soldPlayerIds: string[] = []): Promise<User[]> {
     try {
@@ -56,65 +64,62 @@ export class AuctionEngine {
         return [];
       }
 
-      // Build a set for O(1) lookups
       const soldSet = new Set(soldPlayerIds);
 
-      // Get all bids with player information
+      // Fetch all bids joined with player names
       const { data: bidsData } = await supabase
         .from('bids')
         .select('*, players(id, name)')
         .order('created_at', { ascending: true });
 
-      // Determine winning bids — but ONLY for players that are actually sold.
-      const winningBidsByPlayer: Record<string, { user_id: string; amount: number; player_name: string }> = {};
+      // Determine winning bid per sold player (highest amount wins)
+      const winningBidsByPlayer: Record<
+        string,
+        { user_id: string; amount: number; player_name: string }
+      > = {};
 
       if (bidsData) {
-        const processedPlayers = new Set<string>();
-
+        const processed = new Set<string>();
         for (const bid of bidsData) {
-          if (processedPlayers.has(bid.player_id)) continue;
-          processedPlayers.add(bid.player_id);
+          if (processed.has(bid.player_id)) continue;
+          processed.add(bid.player_id);
 
-          // ── KEY FIX: skip any player not in the sold set ──
-          // Bids for players currently being auctioned or that went unsold
-          // must NOT be counted as wins.
+          // Only count bids for players that have actually been sold
           if (!soldSet.has(bid.player_id)) continue;
 
-          const allBidsForPlayer = bidsData.filter((b: any) => b.player_id === bid.player_id);
-
-          const highestBid = allBidsForPlayer.reduce((max: any, current: any) =>
-            current.amount > max.amount ? current : max
+          const allForPlayer = bidsData.filter(
+            (b: any) => b.player_id === bid.player_id
+          );
+          const highest = allForPlayer.reduce((max: any, cur: any) =>
+            cur.amount > max.amount ? cur : max
           );
 
           winningBidsByPlayer[bid.player_id] = {
-            user_id: highestBid.user_id,
-            amount: highestBid.amount,
-            player_name: (highestBid.players as any)?.name || 'Unknown Player',
+            user_id: highest.user_id,
+            amount: Number(highest.amount),
+            player_name: (highest.players as any)?.name || 'Unknown Player',
           };
         }
       }
 
-      // Map won players to users
-      const userWonPlayersMap: Record<string, WonPlayer[]> = {};
-
-      Object.entries(winningBidsByPlayer).forEach(([playerId, winData]) => {
-        if (!userWonPlayersMap[winData.user_id]) {
-          userWonPlayersMap[winData.user_id] = [];
-        }
-        userWonPlayersMap[winData.user_id].push({
+      // Map won players → users
+      const wonMap: Record<string, WonPlayer[]> = {};
+      Object.entries(winningBidsByPlayer).forEach(([playerId, win]) => {
+        if (!wonMap[win.user_id]) wonMap[win.user_id] = [];
+        wonMap[win.user_id].push({
           playerId,
-          playerName: winData.player_name,
-          amount: winData.amount,
+          playerName: win.player_name,
+          amount: win.amount,
         });
       });
 
-      // Build user objects — balance comes from DB (source of truth)
+      // Balance is the source of truth from the DB row
       return (usersData || []).map((u: any) => ({
         id: u.id,
         username: u.username,
-        balance: u.balance,
+        balance: Number(u.balance),
         role: u.role,
-        wonPlayers: userWonPlayersMap[u.id] || [],
+        wonPlayers: wonMap[u.id] || [],
       }));
     } catch (error) {
       console.error('Error in loadUsers:', error);
@@ -123,56 +128,7 @@ export class AuctionEngine {
   }
 
   /**
-   * Update user balance in database
-   */
-  static async updateUserBalance(userId: string, newBalance: number): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ balance: newBalance })
-        .eq('id', userId);
-
-      if (error) {
-        console.error('Error updating balance:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in updateUserBalance:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Save a bid to database
-   */
-  static async saveBid(playerId: string, userId: string, amount: number): Promise<string | null> {
-    try {
-      const { data, error } = await supabase
-        .from('bids')
-        .insert({
-          player_id: playerId,
-          user_id: userId,
-          amount: amount,
-        })
-        .select('id')
-        .single();
-
-      if (error) {
-        console.error('Error saving bid:', error);
-        return null;
-      }
-
-      return data?.id || null;
-    } catch (error) {
-      console.error('Error in saveBid:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Get current auction state from database
+   * Get the single auction_state row.
    */
   static async getAuctionState(): Promise<any> {
     try {
@@ -186,7 +142,6 @@ export class AuctionEngine {
         console.error('Error loading auction state:', error);
         return null;
       }
-
       return data;
     } catch (error) {
       console.error('Error in getAuctionState:', error);
@@ -195,7 +150,9 @@ export class AuctionEngine {
   }
 
   /**
-   * Update auction state in database
+   * Generic auction_state update (used by admin for start/pause/resume/
+   * countdown transitions and loadNextPlayer).  Mutations that need
+   * atomicity (bid, settle, extend) use RPCs instead.
    */
   static async updateAuctionState(updates: any): Promise<boolean> {
     try {
@@ -214,7 +171,6 @@ export class AuctionEngine {
         console.error('Error updating auction state:', error);
         return false;
       }
-
       return true;
     } catch (error) {
       console.error('Error in updateAuctionState:', error);
@@ -222,36 +178,124 @@ export class AuctionEngine {
     }
   }
 
+  // ─── ATOMIC RPC CALLS ─────────────────────────────────────────
+
   /**
-   * Reset entire auction to initial state.
+   * Place a bid atomically via RPC.
+   * The PostgreSQL function validates everything inside a single
+   * transaction: status, current highest bid, user balance, then
+   * inserts the bid and resets the timer.
    *
-   * FIX #3 (ordering): auction_state is written LAST. This is critical:
-   *   1. Delete all bids first (so loadUsers won't find stale won-player data).
-   *   2. Reset all USER balances to 10000.
-   *   3. Write auction_state → status = 'idle'.
+   * Returns { success, error, bid_id }
+   */
+  static async placeBidRpc(
+    playerId: string,
+    userId: string,
+    amount: number
+  ): Promise<{ success: boolean; error: string | null; bid_id?: string }> {
+    try {
+      const { data, error } = await supabase.rpc('place_bid', {
+        p_player_id: playerId,
+        p_user_id: userId,
+        p_amount: amount,
+      });
+
+      if (error) {
+        console.error('RPC place_bid error:', error);
+        return { success: false, error: error.message };
+      }
+
+      return data as { success: boolean; error: string | null; bid_id?: string };
+    } catch (error: any) {
+      console.error('Error in placeBidRpc:', error);
+      return { success: false, error: error?.message || 'Network error' };
+    }
+  }
+
+  /**
+   * Settle the current player atomically via RPC.
+   * Determines the winner (or marks unsold), decrements balance,
+   * and transitions to 'result' status — all in one transaction.
    *
-   * Step 3 fires the realtime event. By that point steps 1-2 are already
-   * committed, so any client that reloads users in response to 'idle' will
-   * get clean data. Previously these happened in the same order but the
-   * realtime handler on other clients didn't reload users at all — that's
-   * fixed in auctionStore.
+   * Returns { winner_user_id, winning_amount, error }
+   */
+  static async settlePlayerRpc(
+    playerId: string
+  ): Promise<{ winner_user_id: string | null; winning_amount: number | null; error: string | null }> {
+    try {
+      const { data, error } = await supabase.rpc('settle_player', {
+        p_player_id: playerId,
+      });
+
+      if (error) {
+        console.error('RPC settle_player error:', error);
+        return { winner_user_id: null, winning_amount: null, error: error.message };
+      }
+
+      return data as { winner_user_id: string | null; winning_amount: number | null; error: string | null };
+    } catch (error: any) {
+      console.error('Error in settlePlayerRpc:', error);
+      return { winner_user_id: null, winning_amount: null, error: error?.message || 'Network error' };
+    }
+  }
+
+  /**
+   * Extend auction time atomically via RPC.
+   * Only works when status = 'active'. Adds p_seconds to time_remaining.
+   *
+   * Returns { success, error }
+   */
+  static async extendAuctionTimeRpc(
+    seconds: number
+  ): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const { data, error } = await supabase.rpc('extend_auction_time', {
+        p_seconds: seconds,
+      });
+
+      if (error) {
+        console.error('RPC extend_auction_time error:', error);
+        return { success: false, error: error.message };
+      }
+
+      return data as { success: boolean; error: string | null };
+    } catch (error: any) {
+      console.error('Error in extendAuctionTimeRpc:', error);
+      return { success: false, error: error?.message || 'Network error' };
+    }
+  }
+
+  // ─── ADMIN BULK OPERATIONS ────────────────────────────────────
+
+  /**
+   * Reset entire auction to initial state (admin only).
+   *
+   * Order matters: bids and balances are cleaned BEFORE auction_state
+   * is set to 'idle'. That way, when the realtime event fires and other
+   * clients reload users, they see clean data.
    */
   static async resetAuction(): Promise<boolean> {
     try {
       // 1. Delete all bids
-      await supabase.from('bids').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase
+        .from('bids')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
 
       // 2. Reset all USER balances to 10000
       const { data: users } = await supabase.from('users').select('*');
       if (users) {
         for (const user of users) {
           if (user.role === 'USER') {
-            await supabase.from('users').update({ balance: 10000 }).eq('id', user.id);
+            await supabase
+              .from('users')
+              .update({ balance: 10000 })
+              .eq('id', user.id);
           }
         }
       }
 
-      // 3. Reset auction state LAST — this triggers the realtime event
+      // 3. Reset auction_state LAST — triggers realtime event
       await this.updateAuctionState({
         status: 'idle',
         current_player_id: null,

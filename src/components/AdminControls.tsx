@@ -6,25 +6,48 @@ import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import ConfirmDialog from './ConfirmDialog';
 
+const TIME_EXTENSIONS = [5, 10, 15]; // seconds
+
 export default function AdminControls() {
-  const { currentUserRole, status, startAuction, pauseAuction, resumeAuction, reset } = useAuctionStore();
+  const {
+    currentUserRole,
+    status,
+    soldPlayers,
+    currentPlayer,
+    startAuction,
+    pauseAuction,
+    resumeAuction,
+    reset,
+    extendTime,
+  } = useAuctionStore();
+
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [extendError, setExtendError]           = useState<string | null>(null);
 
   if (currentUserRole !== 'ADMIN') {
     return null;
   }
 
-  const handleResetClick = () => {
-    setShowResetConfirm(true);
-  };
+  // Time extension is only meaningful when the auction is actively running
+  // and the current player has NOT already been sold.
+  const currentPlayerSold = currentPlayer
+    ? soldPlayers.includes(currentPlayer.id)
+    : true;
+  const canExtend = status === 'active' && !currentPlayerSold;
 
-  const handleResetConfirm = () => {
-    reset();
-    setShowResetConfirm(false);
-  };
+  // ── handlers ──────────────────────────────────────────────
+  const handleResetClick   = () => setShowResetConfirm(true);
+  const handleResetConfirm = () => { reset(); setShowResetConfirm(false); };
+  const handleResetCancel  = () => setShowResetConfirm(false);
 
-  const handleResetCancel = () => {
-    setShowResetConfirm(false);
+  const handleExtend = async (seconds: number) => {
+    setExtendError(null);
+    const result = await extendTime(seconds);
+    if (!result.success) {
+      setExtendError(result.error);
+      // Auto-clear the error after 3 seconds
+      setTimeout(() => setExtendError(null), 3000);
+    }
   };
 
   return (
@@ -36,6 +59,7 @@ export default function AdminControls() {
         </div>
 
         <div className="space-y-3">
+          {/* ── Start / Pause / Resume ── */}
           {status === 'idle' && (
             <button
               onClick={startAuction}
@@ -63,6 +87,46 @@ export default function AdminControls() {
             </button>
           )}
 
+          {/* ── Time Extension Buttons ── */}
+          {/* Shown whenever there is an active player (countdown, active, paused, result).
+              Buttons are enabled/disabled based on canExtend. */}
+          {(status === 'countdown' || status === 'active' || status === 'paused' || status === 'result') && (
+            <div className="bg-white bg-opacity-10 rounded-lg p-3">
+              <p className="text-white text-sm font-semibold mb-2 text-center">⏱ Extend Time</p>
+              <div className="flex gap-2">
+                {TIME_EXTENSIONS.map((sec) => (
+                  <button
+                    key={sec}
+                    onClick={() => handleExtend(sec)}
+                    disabled={!canExtend}
+                    className={`flex-1 font-bold py-2 px-3 rounded-lg transition text-sm shadow
+                      ${canExtend
+                        ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
+                        : 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                      }`}
+                  >
+                    +{sec}s
+                  </button>
+                ))}
+              </div>
+
+              {/* Error feedback */}
+              {extendError && (
+                <p className="text-red-300 text-xs text-center mt-2">{extendError}</p>
+              )}
+
+              {/* Disabled reason hint */}
+              {!canExtend && (
+                <p className="text-white text-opacity-60 text-xs text-center mt-2">
+                  {status !== 'active'
+                    ? 'Available only during active auction'
+                    : 'Player already sold'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* ── Reset ── */}
           <button
             onClick={handleResetClick}
             className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg"
@@ -70,6 +134,7 @@ export default function AdminControls() {
             🔄 Reset Auction
           </button>
 
+          {/* ── Status badge ── */}
           <div className="bg-white bg-opacity-20 rounded-lg p-3">
             <p className="text-white text-sm text-center">
               Status: <span className="font-bold uppercase">{status}</span>
