@@ -41,10 +41,23 @@ function getWinrateLabel(winrate: number): { text: string; color: string } {
   }
 }
 
+function getWinrateTextColor(winrate: number): string {
+  if (winrate < 50) {
+    return 'text-gray-400';
+  } else if (winrate < 60) {
+    return 'text-green-400';
+  } else if (winrate < 70) {
+    return 'text-blue-400';
+  } else {
+    return 'text-purple-400';
+  }
+}
+
 export default function PlayerCard({ player }: PlayerCardProps) {
   const bgClass = getWinrateBackground(player.winrate);
   const glowClass = getWinrateGlow(player.winrate);
   const wrLabel = getWinrateLabel(player.winrate);
+  const wrTextColor = getWinrateTextColor(player.winrate);
 
   return (
     <div className={`relative rounded-2xl overflow-hidden max-w-md w-full ${glowClass}`}>
@@ -82,12 +95,12 @@ export default function PlayerCard({ player }: PlayerCardProps) {
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
             <p className="text-xs text-gray-400 mb-1">WN8</p>
-            <p className="text-xl font-bold text-purple-400">{player.wn8_30d}</p>
+            <p className={`text-xl font-bold ${wrTextColor}`}>{player.wn8_30d}</p>
           </div>
 
           <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
             <p className="text-xs text-gray-400 mb-1">WIN%</p>
-            <p className="text-xl font-bold text-green-400">{player.winrate.toFixed(1)}%</p>
+            <p className={`text-xl font-bold ${wrTextColor}`}>{player.winrate.toFixed(1)}%</p>
           </div>
 
           <div className="bg-gray-800 rounded-lg p-3 text-center border border-gray-700">
