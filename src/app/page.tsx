@@ -61,7 +61,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-8 text-center">
           <h1 className="text-5xl font-bold text-gray-900 mb-2">Live Auction System</h1>
-          <p className="text-gray-600">FIFA-Style Player Draft Auction</p>
+          <p className="text-gray-600 font-semibold">Created by Adrian — Full-Stack Developer | Discord: _the_adrian_</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
