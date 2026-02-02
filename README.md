@@ -1,191 +1,261 @@
-# Live Auction System - T3 App
+# 🏆 LIVE AUCTION APP – README
 
-A complete, production-ready FIFA-style live auction system built with Next.js App Router, TypeScript, Tailwind CSS, and Zustand.
+## 📌 Overview
 
-## Features
+**Auction App** is a real-time live auction application designed to simulate a *player auction system* (inspired by fantasy leagues / sports auctions).
 
-### User Management
+The app supports **Admin**, **Spectator**, and **Users (Bidders)** with live updates, auction states, SOLD / UNSOLD messages, rounds, re-auctions, and full admin control.
 
-- 5 predefined users (USER1-USER5) + 1 ADMIN
-- Each user starts with $10,000 balance
-- Simple login by selecting username
-- Users with $0 balance cannot bid
+The backend is powered by **Supabase (PostgreSQL + Realtime + RLS)**, while the frontend consumes live data via REST APIs and realtime subscriptions.
 
-### Auction Flow
+---
 
-- One player appears at a time
-- 3-2-1 countdown before each auction
-- 30-second auction timer
-- Timer adds +10s when bid placed with ≤15s remaining
-- Highest bidder wins when timer reaches 0
-- 3-second result display between players
+## 🧱 Architecture
 
-### Bidding Rules
+### 🔹 Backend
 
-- Bids must be higher than current highest
-- Two users cannot place the same bid amount
-- First bidder at a price wins
-- Insufficient balance bids are rejected
-- Winner's balance is deducted automatically
+* Supabase (PostgreSQL)
+* Realtime subscriptions (`bids`, `auction_state`, `players`)
+* SQL triggers & functions
+* Row Level Security (RLS)
 
-### Special Rule
+### 🔹 Frontend
 
-- Players with NO bids are pushed to end of auction list
-- They reappear after all other players
-- Ensures every player gets multiple chances
+* Admin Panel
+* User (Bidder) Panel
+* Spectator View
+* Live auction messages
 
-### Admin Controls
+---
 
-- Start/Pause/Resume auction
-- Reset auction
-- Same UI as users + extra controls
-
-### Real-Time Updates (Simulated)
-
-- Global state with Zustand
-- All users see same state:
-  - Current player
-  - Highest bid & bidder
-  - Time remaining
-  - Their own balance
-
-## Installation
-
-```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Project Structure
+## 📂 Project File Structure
 
 ```
-auction-system/
+auction-app/
 ├── src/
-│   ├── app/
-│   │   ├── layout.tsx          # Root layout
-│   │   ├── page.tsx            # Main page
-│   │   └── globals.css         # Global styles
+│   ├── admin/
+│   │   ├── AdminDashboard.tsx
+│   │   ├── AuctionControls.tsx
+│   │   └── AdminUsersOverview.tsx
+│   │
+│   ├── user/
+│   │   ├── UserDashboard.tsx
+│   │   ├── BidPanel.tsx
+│   │   └── SquadOverview.tsx
+│   │
+│   ├── spectator/
+│   │   └── SpectatorView.tsx
+│   │
 │   ├── components/
-│   │   ├── AuctionBoard.tsx    # Player display + timer
-│   │   ├── PlayerCard.tsx      # Player card component
-│   │   ├── BidControls.tsx     # Bid input and buttons
-│   │   ├── AdminControls.tsx   # Admin-only controls
-│   │   ├── UserSelector.tsx    # Login screen
-│   │   ├── UserBalance.tsx     # User info display
-│   │   ├── BidHistory.tsx      # Recent bids list
-│   │   └── ResultBanner.tsx    # Winner announcement
-│   ├── store/
-│   │   └── auctionStore.ts     # Zustand state management
+│   │   ├── PlayerCard.tsx
+│   │   ├── Timer.tsx
+│   │   └── AuctionMessage.tsx
+│   │
 │   ├── services/
-│   │   └── auctionEngine.ts    # Core auction logic
-│   ├── types/
-│   │   └── auction.types.ts    # TypeScript types
-│   └── data/
-│       └── players.mock.json   # Mock player data
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts
-├── postcss.config.js
-└── next.config.js
+│   │   ├── supabaseClient.ts
+│   │   ├── auctionService.ts
+│   │   └── bidService.ts
+│   │
+│   ├── hooks/
+│   │   ├── useAuctionState.ts
+│   │   ├── useBids.ts
+│   │   └── usePlayers.ts
+│   │
+│   ├── utils/
+│   │   └── permissions.ts
+│   │
+│   └── App.tsx
+│
+├── sql/
+│   ├── schema.sql
+│   ├── triggers.sql
+│   ├── rls.sql
+│   ├── reset_full.sql
+│   ├── reset_players.sql
+│   └── reset_users_partial.sql
+│
+├── README.md
+└── package.json
 ```
 
-## Usage
+---
 
-1. **Select User**: Choose from ADMIN or USER1-USER5
-2. **Start Auction**: Admin clicks "Start Auction"
-3. **Place Bids**: Users enter bid amount or use quick bid buttons
-4. **Watch Timer**: Timer counts down from 30s (adds +10s if bid ≤15s)
-5. **View Results**: See winner announcement for 3s
-6. **Next Player**: Automatically loads next player
+## 👥 User Roles
 
-## Code Architecture
+### 👑 Admin
 
-### State Management (Zustand)
+* Start / stop auctions
+* Control rounds and timers
+* See buyer and final bid price
+* Perform partial or full system resets
 
-- Single global store for all auction state
-- Actions for user selection, bidding, auction control
-- Tick function for timer updates
+### 👀 Spectator
 
-### Auction Engine (Service Layer)
+* Read-only view
+* Sees only **SOLD / UNSOLD** messages
+* No access to bidder data or prices
 
-- Pure functions for auction logic
-- User initialization
-- Bid validation
-- Balance deduction
-- Player rotation with unsold player handling
-- Timer management (isolated from UI)
+### 🙋 User (Bidder)
 
-### Components
+* Has a fixed budget
+* Places bids in real time
+* Receives SOLD / UNSOLD feedback
 
-- Modular, reusable React components
-- Clear separation of concerns
-- Disabled states for invalid actions
-- Real-time updates via Zustand subscriptions
+---
 
-## Configuration
+## 🗄️ Database Structure
 
-### Players
+### 📦 `users`
 
-Edit `src/data/players.mock.json` to add/modify players:
+| Column  | Type    | Description              |
+| ------- | ------- | ------------------------ |
+| id      | uuid    | user id                  |
+| name    | text    | display name             |
+| role    | text    | admin / spectator / user |
+| balance | integer | available budget         |
 
-```json
-{
-  "id": "p1",
-  "name": "Player Name",
-  "role": "Position",
-  "rating": 90,
-  "image": "https://...",
-  "basePrice": 1000
-}
+---
+
+### 🔑 `auth_keys`
+
+| Column  | Type | Description           |
+| ------- | ---- | --------------------- |
+| id      | uuid | key id                |
+| user_id | uuid | linked user           |
+| key     | text | auth token / password |
+
+---
+
+### 🧍 `players`
+
+| Column     | Type    | Description        |
+| ---------- | ------- | ------------------ |
+| id         | uuid    | player id          |
+| name       | text    | player name        |
+| wn8_30d    | integer | performance metric |
+| winrate    | decimal | winrate %          |
+| avg_damage | integer | average damage     |
+| base_price | integer | starting price     |
+
+---
+
+### 💰 `bids`
+
+| Column     | Type      | Description |
+| ---------- | --------- | ----------- |
+| id         | uuid      | bid id      |
+| player_id  | uuid      | player      |
+| user_id    | uuid      | bidder      |
+| amount     | integer   | bid amount  |
+| created_at | timestamp | timestamp   |
+
+---
+
+### ⏱️ `auction_state`
+
+| Column            | Type    | Description               |
+| ----------------- | ------- | ------------------------- |
+| status            | text    | idle / running / finished |
+| current_player_id | uuid    | active player             |
+| time_remaining    | integer | seconds                   |
+| current_round     | integer | round number              |
+| sold_players      | uuid[]  | sold players              |
+| unsold_players    | uuid[]  | unsold players            |
+
+---
+
+## 🔁 Auction Flow
+
+1. Admin starts the auction
+2. `current_player_id` is set
+3. Users place bids
+4. Timer expires
+5. If bids exist → **SOLD**
+6. If no bids → **UNSOLD** → re-auction
+7. Spectators see only SOLD / UNSOLD status
+
+---
+
+## 🧠 Core Logic Rules
+
+* **Admin view**:
+
+  * buyer identity
+  * final price
+
+* **User & Spectator view**:
+
+  * auction result text only
+
+All updates are synchronized through realtime subscriptions.
+
+---
+
+## 🔐 Security
+
+* RLS enabled on all tables
+* Admin has full access
+* Users have restricted read/write access
+* Authentication handled via `auth_keys`
+
+---
+
+## ♻️ Common SQL Resets
+
+### 🔄 Reset players & bids
+
+```sql
+DELETE FROM bids;
+DELETE FROM players;
 ```
 
-### Timer Settings
+### 🔄 Reset User Squad Overview only
 
-In `src/store/auctionStore.ts`:
-
-```typescript
-const COUNTDOWN_DURATION = 3; // Countdown seconds
-const AUCTION_DURATION = 30; // Auction seconds
-const RESULT_DISPLAY_DURATION = 3; // Result display seconds
+```sql
+DELETE FROM bids;
 ```
 
-### Users
+### 🔄 Full system reset
 
-In `src/services/auctionEngine.ts`:
+Use: **LIVE AUCTION SYSTEM - COMPLETE DATABASE RESET** script
 
-```typescript
-static initializeUsers(): User[] {
-  return [
-    { id: 'admin', username: 'ADMIN', balance: 10000, isAdmin: true },
-    { id: 'u1', username: 'USER1', balance: 10000, isAdmin: false },
-    // Add more users...
-  ];
-}
-```
+---
 
-## Future Extensions (Supabase Integration)
+## 🧪 Debug & Common Errors
 
-The architecture is ready for Supabase integration:
+### ❌ `player_id=in()` error
 
-1. Replace mock users with Supabase Auth
-2. Store players in Supabase Database
-3. Use Supabase Realtime for live updates
-4. Persist auction history and results
-5. Add user profiles and statistics
+* Occurs when player list is empty
+* Ensure players are inserted before querying bids
 
-## Technical Notes
+### ❌ Trigger dependency errors
 
-- **No Authentication**: Users select username (add auth later)
-- **No Backend**: All logic client-side with Zustand
-- **No Database**: Mock data in JSON file
-- **Timer Logic**: Isolated in service layer, not dependent on UI renders
-- **Production-Ready**: Clean code, TypeScript, comprehensive comments
+* Use `DROP TRIGGER ... CASCADE`
 
-## License
+---
 
-MIT
+## 📦 Best Practices
+
+* Do not edit production data manually
+* Version SQL scripts
+* Always backup before resets
+
+---
+
+## 🚀 Project Status
+
+✅ Fully functional
+✅ Realtime enabled
+✅ Admin-controlled
+🛠️ Ongoing improvements (UX & messaging)
+
+---
+
+### Want more?
+
+* API documentation
+* Database ER diagram
+* Deployment guide (Supabase)
+* Environment variables setup
+
+👉 Just tell me and I’ll extend this README.
