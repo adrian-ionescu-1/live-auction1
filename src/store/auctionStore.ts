@@ -301,8 +301,8 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             };
 
             const newTimeRemaining =
-              state.timeRemaining <= 15
-                ? Math.min(state.timeRemaining + 10, 30)
+              state.timeRemaining <= 10
+                ? Math.min(state.timeRemaining + 5, 30)
                 : state.timeRemaining;
 
             set({

@@ -250,12 +250,3 @@ Use: **LIVE AUCTION SYSTEM - COMPLETE DATABASE RESET** script
 🛠️ Ongoing improvements (UX & messaging)
 
 ---
-
-### Want more?
-
-* API documentation
-* Database ER diagram
-* Deployment guide (Supabase)
-* Environment variables setup
-
-👉 Just tell me and I’ll extend this README.
