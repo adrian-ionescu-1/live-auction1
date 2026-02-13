@@ -15,29 +15,49 @@ export default function BidHistory() {
   const recentBids = bidHistory.slice(-5).reverse();
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 max-w-md w-full">
-      <h3 className="text-lg font-bold text-gray-900 mb-4">Recent Bids</h3>
+    <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 max-w-md w-full">
+      <h3 className="text-base font-extrabold tracking-wide text-zinc-100 mb-4">
+        Recent Bids
+      </h3>
+
       <div className="space-y-2">
-        {recentBids.map((bid, index) => (
-          <div
-            key={`${bid.userId}-${bid.timestamp}`}
-            className={`flex justify-between items-center p-3 rounded-lg ${
-              index === 0 ? 'bg-green-50 border-2 border-green-300' : 'bg-gray-50'
-            }`}
-          >
-            <div>
-              <p className={`font-semibold ${index === 0 ? 'text-green-700' : 'text-gray-700'}`}>
-                {bid.username}
-              </p>
-              <p className="text-xs text-gray-500">
-                {new Date(bid.timestamp).toLocaleTimeString()}
+        {recentBids.map((bid, index) => {
+          const isLatest = index === 0;
+
+          return (
+            <div
+              key={`${bid.userId}-${bid.timestamp}`}
+              className={`flex justify-between items-center p-3 rounded-2xl ring-1 transition
+                ${
+                  isLatest
+                    ? 'bg-emerald-500/12 ring-emerald-400/25 shadow-[0_0_25px_rgba(16,185,129,0.15)]'
+                    : 'bg-black/30 ring-white/10'
+                }`}
+            >
+              <div>
+                <p
+                  className={`font-semibold ${
+                    isLatest ? 'text-emerald-200' : 'text-zinc-200'
+                  }`}
+                >
+                  {bid.username}
+                </p>
+
+                <p className="text-xs text-zinc-400 tabular-nums">
+                  {new Date(bid.timestamp).toLocaleTimeString()}
+                </p>
+              </div>
+
+              <p
+                className={`text-xl font-extrabold tabular-nums ${
+                  isLatest ? 'text-emerald-300' : 'text-zinc-300'
+                }`}
+              >
+                ${bid.amount.toLocaleString()}
               </p>
             </div>
-            <p className={`text-xl font-bold ${index === 0 ? 'text-green-600' : 'text-gray-600'}`}>
-              ${bid.amount.toLocaleString()}
-            </p>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

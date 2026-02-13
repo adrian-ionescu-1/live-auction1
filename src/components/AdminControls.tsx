@@ -22,40 +22,45 @@ export default function AdminControls() {
   } = useAuctionStore();
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [extendError, setExtendError]           = useState<string | null>(null);
+  const [extendError, setExtendError] = useState<string | null>(null);
 
   if (currentUserRole !== 'ADMIN') {
     return null;
   }
 
-  // Time extension is only meaningful when the auction is actively running
-  // and the current player has NOT already been sold.
-  const currentPlayerSold = currentPlayer
-    ? soldPlayers.includes(currentPlayer.id)
-    : true;
+  const currentPlayerSold = currentPlayer ? soldPlayers.includes(currentPlayer.id) : true;
   const canExtend = status === 'active' && !currentPlayerSold;
 
-  // ── handlers ──────────────────────────────────────────────
-  const handleResetClick   = () => setShowResetConfirm(true);
-  const handleResetConfirm = () => { reset(); setShowResetConfirm(false); };
-  const handleResetCancel  = () => setShowResetConfirm(false);
+  const handleResetClick = () => setShowResetConfirm(true);
+  const handleResetConfirm = () => {
+    reset();
+    setShowResetConfirm(false);
+  };
+  const handleResetCancel = () => setShowResetConfirm(false);
 
   const handleExtend = async (seconds: number) => {
     setExtendError(null);
     const result = await extendTime(seconds);
     if (!result.success) {
       setExtendError(result.error);
-      // Auto-clear the error after 3 seconds
       setTimeout(() => setExtendError(null), 3000);
     }
   };
 
   return (
     <>
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-xl shadow-lg p-6 max-w-md w-full">
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
-          <h3 className="text-xl font-bold text-white">Admin Controls</h3>
+      <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 w-full">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="relative h-2.5 w-2.5">
+            <span className="absolute inset-0 rounded-full bg-amber-300/80 blur-[2px]" />
+            <span className="absolute inset-0 rounded-full bg-amber-300 animate-pulse" />
+          </div>
+          <h3 className="text-base font-extrabold tracking-wide text-zinc-100">
+            Admin Controls
+          </h3>
+          <span className="ml-auto rounded-full bg-black/30 ring-1 ring-white/10 px-3 py-1 text-[11px] text-zinc-300">
+            {status.toUpperCase()}
+          </span>
         </div>
 
         <div className="space-y-3">
@@ -63,7 +68,9 @@ export default function AdminControls() {
           {status === 'idle' && (
             <button
               onClick={startAuction}
-              className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg"
+              className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
+                         text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/20
+                         ring-1 ring-emerald-400/25 active:scale-[0.98]"
             >
               ▶ Start Auction
             </button>
@@ -72,7 +79,9 @@ export default function AdminControls() {
           {status === 'active' && (
             <button
               onClick={pauseAuction}
-              className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg"
+              className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
+                         text-amber-200 bg-amber-500/15 hover:bg-amber-500/20
+                         ring-1 ring-amber-400/25 active:scale-[0.98]"
             >
               ⏸ Pause Auction
             </button>
@@ -81,28 +90,35 @@ export default function AdminControls() {
           {status === 'paused' && (
             <button
               onClick={resumeAuction}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg"
+              className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
+                         text-cyan-200 bg-cyan-500/15 hover:bg-cyan-500/20
+                         ring-1 ring-cyan-400/25 active:scale-[0.98]"
             >
               ▶ Resume Auction
             </button>
           )}
 
           {/* ── Time Extension Buttons ── */}
-          {/* Shown whenever there is an active player (countdown, active, paused, result).
-              Buttons are enabled/disabled based on canExtend. */}
-          {(status === 'countdown' || status === 'active' || status === 'paused' || status === 'result') && (
-            <div className="bg-white bg-opacity-10 rounded-lg p-3">
-              <p className="text-white text-sm font-semibold mb-2 text-center">⏱ Extend Time</p>
+          {(status === 'countdown' ||
+            status === 'active' ||
+            status === 'paused' ||
+            status === 'result') && (
+            <div className="rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
+              <p className="text-zinc-200 text-sm font-semibold mb-3 text-center">
+                ⏱ Extend Time
+              </p>
+
               <div className="flex gap-2">
                 {TIME_EXTENSIONS.map((sec) => (
                   <button
                     key={sec}
                     onClick={() => handleExtend(sec)}
                     disabled={!canExtend}
-                    className={`flex-1 font-bold py-2 px-3 rounded-lg transition text-sm shadow
-                      ${canExtend
-                        ? 'bg-cyan-500 hover:bg-cyan-600 text-white'
-                        : 'bg-gray-500 text-gray-300 cursor-not-allowed'
+                    className={`flex-1 rounded-xl py-2 px-3 text-sm font-bold transition ring-1 active:scale-[0.98]
+                      ${
+                        canExtend
+                          ? 'text-cyan-200 bg-cyan-500/15 hover:bg-cyan-500/20 ring-cyan-400/25'
+                          : 'text-zinc-500 bg-white/5 ring-white/10 cursor-not-allowed opacity-70'
                       }`}
                   >
                     +{sec}s
@@ -110,14 +126,14 @@ export default function AdminControls() {
                 ))}
               </div>
 
-              {/* Error feedback */}
               {extendError && (
-                <p className="text-red-300 text-xs text-center mt-2">{extendError}</p>
+                <p className="text-red-200 text-xs text-center mt-3">
+                  {extendError}
+                </p>
               )}
 
-              {/* Disabled reason hint */}
               {!canExtend && (
-                <p className="text-white text-opacity-60 text-xs text-center mt-2">
+                <p className="text-zinc-400 text-xs text-center mt-3">
                   {status !== 'active'
                     ? 'Available only during active auction'
                     : 'Player already sold'}
@@ -129,15 +145,17 @@ export default function AdminControls() {
           {/* ── Reset ── */}
           <button
             onClick={handleResetClick}
-            className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-lg transition shadow-lg"
+            className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
+                       text-red-200 bg-red-500/15 hover:bg-red-500/20
+                       ring-1 ring-red-400/25 active:scale-[0.98]"
           >
             🔄 Reset Auction
           </button>
 
-          {/* ── Status badge ── */}
-          <div className="bg-white bg-opacity-20 rounded-lg p-3">
-            <p className="text-white text-sm text-center">
-              Status: <span className="font-bold uppercase">{status}</span>
+          {/* ── Status (extra) ── */}
+          <div className="rounded-2xl bg-white/5 ring-1 ring-white/10 p-3">
+            <p className="text-zinc-300 text-sm text-center">
+              Status: <span className="font-bold uppercase text-zinc-100">{status}</span>
             </p>
           </div>
         </div>
