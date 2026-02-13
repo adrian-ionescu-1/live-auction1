@@ -12,6 +12,7 @@ const GlowLink = ({
   return (
     <Link
       href={href}
+      prefetch={false}
       className="group relative inline-flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2 ring-1 ring-white/10 text-sm text-zinc-200 hover:bg-white/10 transition active:scale-[0.98]"
     >
       <span
@@ -260,9 +261,9 @@ export default function HomeLanding() {
             {
               title: "Real-time sync",
               desc: "All clients stay aligned with live updates — no refresh, no drift.",
-              href: "/about",
+              href: "/tournaments",
               glow: "shadow-[0_0_60px_rgba(34,211,238,0.10)]",
-              cta: "About platform →",
+              cta: "Tournament format →",
             },
             {
               title: "Fair bidding flow",
