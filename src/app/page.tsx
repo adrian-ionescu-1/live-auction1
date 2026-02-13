@@ -12,6 +12,7 @@ const GlowLink = ({
   return (
     <Link
       href={href}
+      prefetch={false}
       className="group relative inline-flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2 ring-1 ring-white/10 text-sm text-zinc-200 hover:bg-white/10 transition active:scale-[0.98]"
     >
       <span
@@ -34,7 +35,9 @@ export default function HomeLanding() {
               <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-emerald-400/70 blur-[2px]" />
             </div>
             <div className="leading-tight">
-              <div className="text-sm font-semibold tracking-wide">Auction App</div>
+              <div className="text-sm font-semibold tracking-wide">
+                Auction App
+              </div>
               <div className="text-xs text-zinc-400">
                 Tournament Draft • Real-time Bidding
               </div>
@@ -82,7 +85,9 @@ export default function HomeLanding() {
         <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs ring-1 ring-white/10">
-              <span className="text-emerald-300 font-semibold">ESPORTS EDITION</span>
+              <span className="text-emerald-300 font-semibold">
+                ESPORTS EDITION
+              </span>
               <span className="text-zinc-400">•</span>
               <span className="text-zinc-300">Real-time</span>
               <span className="text-zinc-400">•</span>
@@ -100,7 +105,8 @@ export default function HomeLanding() {
 
             <p className="mt-5 max-w-xl text-lg text-zinc-300">
               Designed for WoT Blitz tournaments: live bidding, controlled timer
-              extensions, fair-play rules, and clean squad tracking — synced in real time.
+              extensions, fair-play rules, and clean squad tracking — synced in real
+              time.
             </p>
 
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -128,16 +134,28 @@ export default function HomeLanding() {
 
             {/* Links to STATIC pages (no underline) */}
             <div className="mt-8 flex flex-wrap gap-3">
-              <GlowLink href="/tournaments" glow="shadow-[0_0_50px_rgba(34,211,238,0.12)]">
+              <GlowLink
+                href="/tournaments"
+                glow="shadow-[0_0_50px_rgba(34,211,238,0.12)]"
+              >
                 View tournament format <span aria-hidden>→</span>
               </GlowLink>
-              <GlowLink href="/rules" glow="shadow-[0_0_50px_rgba(16,185,129,0.12)]">
+              <GlowLink
+                href="/rules"
+                glow="shadow-[0_0_50px_rgba(16,185,129,0.12)]"
+              >
                 Read full rules <span aria-hidden>→</span>
               </GlowLink>
-              <GlowLink href="/spectator" glow="shadow-[0_0_50px_rgba(236,72,153,0.10)]">
+              <GlowLink
+                href="/spectator"
+                glow="shadow-[0_0_50px_rgba(236,72,153,0.10)]"
+              >
                 Spectator info <span aria-hidden>→</span>
               </GlowLink>
-              <GlowLink href="/faq" glow="shadow-[0_0_50px_rgba(255,255,255,0.08)]">
+              <GlowLink
+                href="/faq"
+                glow="shadow-[0_0_50px_rgba(255,255,255,0.08)]"
+              >
                 FAQ <span aria-hidden>→</span>
               </GlowLink>
             </div>
@@ -152,8 +170,12 @@ export default function HomeLanding() {
 
             <div className="relative flex items-center justify-between">
               <div>
-                <div className="text-sm font-semibold tracking-wide">LIVE AUCTION HUD</div>
-                <div className="text-xs text-zinc-400">Preview • Tournament draft flow</div>
+                <div className="text-sm font-semibold tracking-wide">
+                  LIVE AUCTION HUD
+                </div>
+                <div className="text-xs text-zinc-400">
+                  Preview • Tournament draft flow
+                </div>
               </div>
               <div className="rounded-xl bg-black/40 px-3 py-1 text-xs ring-1 ring-white/10">
                 Live
@@ -163,13 +185,17 @@ export default function HomeLanding() {
             <div className="relative mt-6 rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
               <div className="flex items-center justify-between text-xs text-zinc-400">
                 <span>Current Player</span>
-                <span className="font-semibold text-zinc-200 tabular-nums">00:18</span>
+                <span className="font-semibold text-zinc-200 tabular-nums">
+                  00:18
+                </span>
               </div>
 
               <div className="mt-3 flex items-end justify-between">
                 <div>
                   <div className="text-lg font-bold">Player #07</div>
-                  <div className="mt-1 text-xs text-zinc-400">WN8 • Winrate • Avg DMG</div>
+                  <div className="mt-1 text-xs text-zinc-400">
+                    WN8 • Winrate • Avg DMG
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-zinc-400">Highest bid</div>
@@ -210,7 +236,9 @@ export default function HomeLanding() {
 
               <div className="rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
                 <div className="text-xs text-zinc-400">Timing</div>
-                <div className="mt-1 text-sm font-semibold">Controlled extensions</div>
+                <div className="mt-1 text-sm font-semibold">
+                  Controlled extensions
+                </div>
                 <div className="mt-1 text-xs text-zinc-400">
                   Only extends in final seconds to keep the pace.
                 </div>
@@ -219,13 +247,22 @@ export default function HomeLanding() {
 
             {/* HUD call-to-actions that go to static pages (not login) */}
             <div className="relative mt-6 flex flex-wrap gap-3">
-              <GlowLink href="/tournaments" glow="shadow-[0_0_50px_rgba(34,211,238,0.10)]">
+              <GlowLink
+                href="/tournaments"
+                glow="shadow-[0_0_50px_rgba(34,211,238,0.10)]"
+              >
                 Format
               </GlowLink>
-              <GlowLink href="/rules" glow="shadow-[0_0_50px_rgba(16,185,129,0.10)]">
+              <GlowLink
+                href="/rules"
+                glow="shadow-[0_0_50px_rgba(16,185,129,0.10)]"
+              >
                 Rules
               </GlowLink>
-              <GlowLink href="/faq" glow="shadow-[0_0_50px_rgba(255,255,255,0.07)]">
+              <GlowLink
+                href="/faq"
+                glow="shadow-[0_0_50px_rgba(255,255,255,0.07)]"
+              >
                 FAQ
               </GlowLink>
             </div>
@@ -260,9 +297,10 @@ export default function HomeLanding() {
             {
               title: "Real-time sync",
               desc: "All clients stay aligned with live updates — no refresh, no drift.",
-              href: "/about",
+              // FIX: /about was 404. Point to an existing route:
+              href: "/tournaments",
               glow: "shadow-[0_0_60px_rgba(34,211,238,0.10)]",
-              cta: "About platform →",
+              cta: "Tournament format →",
             },
             {
               title: "Fair bidding flow",
@@ -308,11 +346,15 @@ export default function HomeLanding() {
                 8 Teams • $10,000 Budget • Max 10 picks
               </div>
               <div className="mt-2 text-sm text-zinc-300">
-                Optimized for fast, fair auctions with clear roster caps and pacing rules.
+                Optimized for fast, fair auctions with clear roster caps and pacing
+                rules.
               </div>
             </div>
 
-            <GlowLink href="/tournaments" glow="shadow-[0_0_60px_rgba(34,211,238,0.12)]">
+            <GlowLink
+              href="/tournaments"
+              glow="shadow-[0_0_60px_rgba(34,211,238,0.12)]"
+            >
               Tournament details <span aria-hidden>→</span>
             </GlowLink>
           </div>
@@ -347,7 +389,10 @@ export default function HomeLanding() {
             </h2>
           </div>
 
-          <GlowLink href="/faq" glow="shadow-[0_0_60px_rgba(255,255,255,0.08)]">
+          <GlowLink
+            href="/faq"
+            glow="shadow-[0_0_60px_rgba(255,255,255,0.08)]"
+          >
             All questions <span aria-hidden>→</span>
           </GlowLink>
         </div>
@@ -385,20 +430,33 @@ export default function HomeLanding() {
             <div>
               <div className="text-2xl font-extrabold">Ready to enter the arena?</div>
               <div className="mt-2 text-sm text-zinc-300">
-                Participants join using an access key provided by the tournament organizer.
+                Participants join using an access key provided by the tournament
+                organizer.
               </div>
 
               <div className="mt-4 flex flex-wrap gap-3">
-                <GlowLink href="/spectator" glow="shadow-[0_0_60px_rgba(236,72,153,0.10)]">
+                <GlowLink
+                  href="/spectator"
+                  glow="shadow-[0_0_60px_rgba(236,72,153,0.10)]"
+                >
                   Spectator mode <span aria-hidden>→</span>
                 </GlowLink>
-                <GlowLink href="/tournaments" glow="shadow-[0_0_60px_rgba(34,211,238,0.12)]">
+                <GlowLink
+                  href="/tournaments"
+                  glow="shadow-[0_0_60px_rgba(34,211,238,0.12)]"
+                >
                   Tournament format <span aria-hidden>→</span>
                 </GlowLink>
-                <GlowLink href="/rules" glow="shadow-[0_0_60px_rgba(16,185,129,0.10)]">
+                <GlowLink
+                  href="/rules"
+                  glow="shadow-[0_0_60px_rgba(16,185,129,0.10)]"
+                >
                   Rules <span aria-hidden>→</span>
                 </GlowLink>
-                <GlowLink href="/faq" glow="shadow-[0_0_60px_rgba(255,255,255,0.08)]">
+                <GlowLink
+                  href="/faq"
+                  glow="shadow-[0_0_60px_rgba(255,255,255,0.08)]"
+                >
                   FAQ <span aria-hidden>→</span>
                 </GlowLink>
               </div>
