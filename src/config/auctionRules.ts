@@ -1,4 +1,4 @@
-export const TARGET_PLAYERS = 8;
+export const TARGET_PLAYERS = 10;
 
 export const MIN_PLAYER_COST = 110;
 
