@@ -7,30 +7,35 @@ import { useAuctionStore } from '@/store/auctionStore';
 export default function ResultBanner() {
   const { status, resultMessage, countdown } = useAuctionStore();
 
-  // Only show during the per-player 'result' phase (the 3-second SOLD! flash).
-  // The 'finished' state is now handled exclusively by ResultsView (modal) for
-  // USER/SPECTATOR and not shown at all for ADMIN — so we must not render here
-  // when finished, otherwise two overlays would stack.
   if (status !== 'result') {
     return null;
   }
 
+  const pct = ((3 - countdown) / 3) * 100;
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full text-center animate-pulse">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="w-full max-w-2xl text-center rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm p-8 animate-pulse">
         <div className="mb-4">
-          <h2 className="text-5xl font-bold text-green-600 mb-2">SOLD!</h2>
+          <h2 className="text-5xl font-extrabold text-emerald-300 mb-2">
+            SOLD!
+          </h2>
         </div>
 
-        <p className="text-2xl text-gray-700 mb-6">{resultMessage}</p>
+        <p className="text-lg sm:text-2xl text-zinc-100 mb-6">
+          {resultMessage}
+        </p>
 
-        <div className="text-gray-500">
-          <p className="text-lg">Next player in {countdown} seconds...</p>
-          <div className="mt-4 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="text-zinc-400">
+          <p className="text-sm sm:text-lg">
+            Next player in <span className="font-semibold text-zinc-200 tabular-nums">{countdown}</span> seconds...
+          </p>
+
+          <div className="mt-4 h-2 rounded-full overflow-hidden bg-white/5 ring-1 ring-white/10">
             <div
-              className="h-full bg-blue-600 transition-all duration-1000"
-              style={{ width: `${((3 - countdown) / 3) * 100}%` }}
-            ></div>
+              className="h-full transition-all duration-1000 bg-gradient-to-r from-emerald-400/55 via-cyan-400/55 to-fuchsia-400/45"
+              style={{ width: `${pct}%` }}
+            />
           </div>
         </div>
       </div>

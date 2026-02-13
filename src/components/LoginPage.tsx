@@ -42,16 +42,20 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-600 to-purple-700 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-12 max-w-md w-full">
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm p-8 sm:p-10">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Welcome to the Auction</h1>
-          <p className="text-gray-600">Enter your access key to continue</p>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-zinc-100 mb-2">
+            Welcome to the Auction
+          </h1>
+          <p className="text-zinc-300">Enter your access key to continue</p>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Access Key</label>
+            <label className="block text-sm font-medium text-zinc-300 mb-2">
+              Access Key
+            </label>
             <input
               type="text"
               value={key}
@@ -59,27 +63,35 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               onKeyPress={handleKeyPress}
               placeholder="Enter your key"
               disabled={loading}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-lg text-black placeholder-gray-400"
+              className="w-full rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3
+                         text-zinc-100 placeholder:text-zinc-500
+                         focus:outline-none focus:ring-2 focus:ring-emerald-400/35
+                         disabled:opacity-60 disabled:cursor-not-allowed text-lg"
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3">
-              <p className="text-sm text-red-800 text-center font-semibold">{error}</p>
+            <div className="rounded-2xl bg-red-500/10 ring-1 ring-red-400/25 p-3">
+              <p className="text-sm text-red-200 text-center font-semibold">
+                {error}
+              </p>
             </div>
           )}
 
           <button
             onClick={handleConnect}
             disabled={loading || !key.trim()}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition disabled:bg-gray-400 disabled:cursor-not-allowed text-lg shadow-lg"
+            className="w-full rounded-2xl py-4 px-6 text-lg font-bold transition
+                       text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/20
+                       ring-1 ring-emerald-400/25 active:scale-[0.98]
+                       disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Connecting...' : 'Connect'}
           </button>
         </div>
 
-        <div className="mt-8 p-4 bg-gray-50 rounded-lg">
-          <p className="text-xs text-gray-600 text-center">
+        <div className="mt-6 rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
+          <p className="text-xs text-zinc-400 text-center">
             If you don't have a key, please contact the auction administrator.
           </p>
         </div>
