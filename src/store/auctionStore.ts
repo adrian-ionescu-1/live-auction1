@@ -41,6 +41,7 @@ const AUCTION_DURATION = 30;
 let auctionStateChannel: RealtimeChannel | null = null;
 let bidsChannel: RealtimeChannel | null = null;
 let usersChannel: RealtimeChannel | null = null;
+let playersChannel: RealtimeChannel | null = null;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 
 // Prevents the admin tick from re-entering during an async transition
@@ -97,7 +98,8 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     if (auctionState) {
       let currentPlayer: Player | null = null;
       if (auctionState.current_player_id) {
-        currentPlayer = players.find((p) => p.id === auctionState.current_player_id) ?? null;
+        currentPlayer =
+          players.find((p) => p.id === auctionState.current_player_id) ?? null;
       }
 
       set({
@@ -300,10 +302,66 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                     username: updatedUser.username as string,
                     balance: updatedUser.balance as number,
                     role: updatedUser.role as UserRole,
+                    // keep u.wonPlayers as-is (playersChannel updates it)
+                    wonPlayers: u.wonPlayers,
                   }
                 : u
             ),
           }));
+        }
+      )
+      .subscribe();
+
+    // 4) PLAYERS CHANNEL (instant target + "who won what")
+    playersChannel = supabase
+      .channel('players-changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'players' },
+        (payload) => {
+          const oldRow = payload.old as Record<string, unknown> | null;
+          const newRow = payload.new as Record<string, unknown>;
+
+          const playerId = newRow.id as string | undefined;
+          if (!playerId) return;
+
+          // only react if sold fields changed (prevents extra work)
+          const oldSoldTo = (oldRow?.sold_to_user_id as string | null) ?? null;
+          const newSoldTo = (newRow.sold_to_user_id as string | null) ?? null;
+          const oldAmount = Number(oldRow?.sold_amount ?? 0) || 0;
+          const newAmount = Number(newRow.sold_amount ?? 0) || 0;
+
+          if (oldSoldTo === newSoldTo && oldAmount === newAmount) return;
+
+          const playerName = (newRow.name as string) || 'Unknown Player';
+
+          set((s) => {
+            // remove this player from everyone first
+            const clearedUsers = s.users.map((u) => ({
+              ...u,
+              wonPlayers: (u.wonPlayers || []).filter((wp) => wp.playerId !== playerId),
+            }));
+
+            // if UNSOLD or cleared -> done
+            if (!newSoldTo) {
+              return { users: clearedUsers };
+            }
+
+            // add to winner
+            const nextUsers = clearedUsers.map((u) =>
+              u.id === newSoldTo
+                ? {
+                    ...u,
+                    wonPlayers: [
+                      ...(u.wonPlayers || []),
+                      { playerId, playerName, amount: newAmount },
+                    ],
+                  }
+                : u
+            );
+
+            return { users: nextUsers };
+          });
         }
       )
       .subscribe();
@@ -322,6 +380,10 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     if (usersChannel) {
       supabase.removeChannel(usersChannel);
       usersChannel = null;
+    }
+    if (playersChannel) {
+      supabase.removeChannel(playersChannel);
+      playersChannel = null;
     }
     if (timerInterval) {
       clearInterval(timerInterval);
