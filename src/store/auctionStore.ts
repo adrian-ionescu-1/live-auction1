@@ -12,13 +12,10 @@
 // 3. SETTLE: When time runs out the admin-only tick calls
 //    settle_player RPC.  No client-side balance math anywhere.
 //
-// 4. REALTIME: All three channels (auction_state, bids, users) are
-//    READ-ONLY.  None of them write back to the database (except the
-//    admin tick & explicit updateAuctionState calls).
+// 4. REALTIME: Channels are READ-ONLY. Only explicit RPC/updates write.
 //
 // 5. TIME EXTENSION: place_bid_core updates auction_state.time_remaining.
-//    The realtime auction_state channel propagates the new
-//    time_remaining to every client automatically.
+//    The realtime auction_state channel propagates the new time_remaining.
 // ───────────────────────────────────────────────────────────────
 
 import { create } from 'zustand';
@@ -98,8 +95,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     if (auctionState) {
       let currentPlayer: Player | null = null;
       if (auctionState.current_player_id) {
-        currentPlayer =
-          players.find((p) => p.id === auctionState.current_player_id) ?? null;
+        currentPlayer = players.find((p) => p.id === auctionState.current_player_id) ?? null;
       }
 
       set({
@@ -113,7 +109,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         countdown: auctionState.countdown ?? COUNTDOWN_DURATION,
         timeRemaining: auctionState.time_remaining ?? AUCTION_DURATION,
 
-        // IMPORTANT: bid history is driven by bidsChannel (no re-fetch here)
+        // bid history is driven by bidsChannel (no re-fetch here)
         currentHighestBid: null,
         bidHistory: [],
 
@@ -209,16 +205,13 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
 
           set((s) => ({
             status: nextStatus,
-            currentPlayerIndex:
-              (newState.current_player_index as number) ?? s.currentPlayerIndex,
+            currentPlayerIndex: (newState.current_player_index as number) ?? s.currentPlayerIndex,
             currentPlayer,
             timeRemaining: (newState.time_remaining as number) ?? s.timeRemaining,
             countdown: (newState.countdown as number) ?? s.countdown,
             currentRound: (newState.current_round as number) ?? s.currentRound,
-            roundTotalPlayers:
-              (newState.round_total_players as number) ?? s.roundTotalPlayers,
-            roundCurrentIndex:
-              (newState.round_current_index as number) ?? s.roundCurrentIndex,
+            roundTotalPlayers: (newState.round_total_players as number) ?? s.roundTotalPlayers,
+            roundCurrentIndex: (newState.round_current_index as number) ?? s.roundCurrentIndex,
             soldPlayers: (newState.sold_players as string[]) ?? s.soldPlayers,
             unsoldrPlayers: (newState.unsold_players as string[]) ?? s.unsoldrPlayers,
 
@@ -230,12 +223,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
           // Admin timer loop control (use role, not users list)
           const isAdmin = get().currentUserRole === 'ADMIN';
 
-          if (
-            isAdmin &&
-            (nextStatus === 'countdown' ||
-              nextStatus === 'active' ||
-              nextStatus === 'result')
-          ) {
+          if (isAdmin && (nextStatus === 'countdown' || nextStatus === 'active' || nextStatus === 'result')) {
             if (!timerInterval) {
               timerInterval = setInterval(() => {
                 get().tick();
@@ -277,7 +265,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             timestamp: new Date(newBid.created_at as string).getTime(),
           };
 
-          // Functional update avoids stale snapshots under high throughput
           set((s) => ({
             currentHighestBid: bid,
             bidHistory: [...s.bidHistory, bid],
@@ -286,7 +273,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       )
       .subscribe();
 
-    // 3) USERS CHANNEL (light updates only; no heavy recompute)
+    // 3) USERS CHANNEL (light updates only)
     usersChannel = supabase
       .channel('users-changes')
       .on(
@@ -302,7 +289,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                     username: updatedUser.username as string,
                     balance: updatedUser.balance as number,
                     role: updatedUser.role as UserRole,
-                    // keep u.wonPlayers as-is (playersChannel updates it)
+                    // keep wonPlayers; playersChannel recomputes it
                     wonPlayers: u.wonPlayers,
                   }
                 : u
@@ -312,56 +299,20 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       )
       .subscribe();
 
-    // 4) PLAYERS CHANNEL (instant target + "who won what")
+    // 4) PLAYERS CHANNEL (robust realtime winners/target)
+    // When a player is SOLD/UNSOLD, we refetch users via loadUsers(sold_players).
+    // This avoids relying on payload.old and avoids incremental drift.
     playersChannel = supabase
       .channel('players-changes')
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'players' },
-        (payload) => {
-          const oldRow = payload.old as Record<string, unknown> | null;
-          const newRow = payload.new as Record<string, unknown>;
+        async () => {
+          const auctionState = await AuctionEngine.getAuctionState();
+          const soldPlayerIds: string[] = auctionState?.sold_players ?? [];
 
-          const playerId = newRow.id as string | undefined;
-          if (!playerId) return;
-
-          // only react if sold fields changed (prevents extra work)
-          const oldSoldTo = (oldRow?.sold_to_user_id as string | null) ?? null;
-          const newSoldTo = (newRow.sold_to_user_id as string | null) ?? null;
-          const oldAmount = Number(oldRow?.sold_amount ?? 0) || 0;
-          const newAmount = Number(newRow.sold_amount ?? 0) || 0;
-
-          if (oldSoldTo === newSoldTo && oldAmount === newAmount) return;
-
-          const playerName = (newRow.name as string) || 'Unknown Player';
-
-          set((s) => {
-            // remove this player from everyone first
-            const clearedUsers = s.users.map((u) => ({
-              ...u,
-              wonPlayers: (u.wonPlayers || []).filter((wp) => wp.playerId !== playerId),
-            }));
-
-            // if UNSOLD or cleared -> done
-            if (!newSoldTo) {
-              return { users: clearedUsers };
-            }
-
-            // add to winner
-            const nextUsers = clearedUsers.map((u) =>
-              u.id === newSoldTo
-                ? {
-                    ...u,
-                    wonPlayers: [
-                      ...(u.wonPlayers || []),
-                      { playerId, playerName, amount: newAmount },
-                    ],
-                  }
-                : u
-            );
-
-            return { users: nextUsers };
-          });
+          const users = await AuctionEngine.loadUsers(soldPlayerIds);
+          set({ users });
         }
       )
       .subscribe();
