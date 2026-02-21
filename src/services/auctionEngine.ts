@@ -31,13 +31,12 @@ export class AuctionEngine {
   }
 
   /**
-   * Load all users with their wonPlayers calculated based on sold players
-   * @param soldPlayerIds - Array of player IDs that have been sold (optional, defaults to empty array)
-   * @returns Promise<User[]> - Array of users with their wonPlayers populated
-   * 
-   * When soldPlayerIds is provided and not empty, wonPlayers will only include players
-   * from that list. When empty or not provided, wonPlayers will include all players
-   * with bids (useful for initial load or reset scenarios).
+   * Load all users with their wonPlayers.
+   * IMPORTANT: wonPlayers is derived from players.sold_to_user_id / sold_amount (server-truth),
+   * not from bids, so it stays correct under high bid volume and re-auctions.
+   *
+   * @param soldPlayerIds - optional list of sold player IDs (e.g. from auction_state.sold_players).
+   * When provided and non-empty, the query is restricted to those IDs for faster loading.
    */
   static async loadUsers(soldPlayerIds: string[] = []): Promise<User[]> {
     try {
@@ -51,56 +50,35 @@ export class AuctionEngine {
         return [];
       }
 
-      // Fetch bids - if soldPlayerIds is provided and not empty, filter by those players
-      let bidsQuery = supabase
-        .from('bids')
-        .select('*, players(id, name)')
-        .order('created_at', { ascending: true });
+      // Source of truth: players table fields set by settle_player
+      let soldQuery = supabase
+        .from('players')
+        .select('id, name, sold_to_user_id, sold_amount')
+        .not('sold_to_user_id', 'is', null);
 
-      // Only filter by soldPlayerIds if the array is not empty
-      // Empty array means we want all bids (e.g., during initial load or reset)
       if (soldPlayerIds.length > 0) {
-        bidsQuery = bidsQuery.in('player_id', soldPlayerIds);
+        soldQuery = soldQuery.in('id', soldPlayerIds);
       }
 
-      const { data: bidsData } = await bidsQuery;
+      const { data: soldPlayersData, error: soldError } = await soldQuery;
 
-      const winningBidsByPlayer: Record<string, { user_id: string; amount: number; player_name: string }> = {};
-
-      if (bidsData && bidsData.length > 0) {
-        const playerIds = new Set<string>();
-
-        for (const bid of bidsData) {
-          if (!playerIds.has(bid.player_id)) {
-            const allBidsForPlayer = bidsData.filter((b: any) => b.player_id === bid.player_id);
-            
-            const highestBid = allBidsForPlayer.reduce((max: any, current: any) =>
-              current.amount > max.amount ? current : max
-            );
-
-            winningBidsByPlayer[bid.player_id] = {
-              user_id: highestBid.user_id,
-              amount: highestBid.amount,
-              player_name: (highestBid.players as any)?.name || 'Unknown Player',
-            };
-
-            playerIds.add(bid.player_id);
-          }
-        }
+      if (soldError) {
+        console.error('Error loading sold players:', soldError);
       }
 
       const userWonPlayersMap: Record<string, WonPlayer[]> = {};
 
-      Object.entries(winningBidsByPlayer).forEach(([playerId, winData]) => {
-        if (!userWonPlayersMap[winData.user_id]) {
-          userWonPlayersMap[winData.user_id] = [];
-        }
-        userWonPlayersMap[winData.user_id].push({
-          playerId,
-          playerName: winData.player_name,
-          amount: winData.amount,
+      for (const p of soldPlayersData || []) {
+        const uid = p.sold_to_user_id as string | null;
+        if (!uid) continue;
+
+        if (!userWonPlayersMap[uid]) userWonPlayersMap[uid] = [];
+        userWonPlayersMap[uid].push({
+          playerId: p.id as string,
+          playerName: (p.name as string) || 'Unknown Player',
+          amount: Number(p.sold_amount) || 0,
         });
-      });
+      }
 
       return (usersData || []).map((u: any) => ({
         id: u.id,
@@ -117,10 +95,7 @@ export class AuctionEngine {
 
   static async updateUserBalance(userId: string, newBalance: number): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ balance: newBalance })
-        .eq('id', userId);
+      const { error } = await supabase.from('users').update({ balance: newBalance }).eq('id', userId);
 
       if (error) {
         console.error('Error updating balance:', error);
@@ -134,6 +109,7 @@ export class AuctionEngine {
     }
   }
 
+  // Optional legacy helper (kept for compatibility). Bids should normally be placed via RPC.
   static async saveBid(playerId: string, userId: string, amount: number): Promise<string | null> {
     try {
       const { data, error } = await supabase
@@ -160,11 +136,7 @@ export class AuctionEngine {
 
   static async getAuctionState(): Promise<any> {
     try {
-      const { data, error } = await supabase
-        .from('auction_state')
-        .select('*')
-        .limit(1)
-        .single();
+      const { data, error } = await supabase.from('auction_state').select('*').limit(1).single();
 
       if (error) {
         console.error('Error loading auction state:', error);
@@ -205,8 +177,10 @@ export class AuctionEngine {
 
   static async resetAuction(): Promise<boolean> {
     try {
+      // Clear bids
       await supabase.from('bids').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
+      // Reset balances
       const { data: users } = await supabase.from('users').select('*');
       if (users) {
         for (const user of users) {
@@ -216,6 +190,13 @@ export class AuctionEngine {
         }
       }
 
+      // Clear sold markers on players (new server-truth fields)
+      await supabase
+        .from('players')
+        .update({ sold_to_user_id: null, sold_amount: null })
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+
+      // Reset auction state
       await this.updateAuctionState({
         status: 'idle',
         current_player_id: null,
@@ -239,7 +220,7 @@ export class AuctionEngine {
 
   /**
    * RPC: Place a bid for a player
-   * Calls the Supabase place_bid RPC function which handles validation and timer extension
+   * Calls the Supabase place_bid RPC function which handles validation and timer extension.
    */
   static async placeBidRpc(
     playerId: string,
@@ -248,9 +229,9 @@ export class AuctionEngine {
   ): Promise<{ success: boolean; error: string | null }> {
     try {
       if (!playerId || !userId || !amount || amount <= 0) {
-        return { 
-          success: false, 
-          error: 'Invalid parameters: playerId, userId, and amount are required' 
+        return {
+          success: false,
+          error: 'Invalid parameters: playerId, userId, and amount are required',
         };
       }
 
