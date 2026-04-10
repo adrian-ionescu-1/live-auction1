@@ -1,5 +1,7 @@
 # 🏆 LIVE AUCTION APP – README
 
+🔗 Live Demo: https://live-auction1.vercel.app/
+
 ## 📌 Overview
 
 **Auction App** is a real-time live auction application designed to simulate a *player auction system* (inspired by fantasy leagues / sports auctions).
