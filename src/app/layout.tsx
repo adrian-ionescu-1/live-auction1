@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import SiteBackground from "./_components/SiteBackground";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -64,6 +66,8 @@ export default function RootLayout({
           <div className="flex-1">{children}</div>
           <SiteFooter />
         </div>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
