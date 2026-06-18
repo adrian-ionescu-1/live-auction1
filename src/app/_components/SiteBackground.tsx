@@ -10,9 +10,9 @@ export default function SiteBackground() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,#00000000_0%,#000000aa_60%,#000000ee_100%)]" />
 
       {/* Arena glows */}
-      <div className="absolute -top-44 left-1/2 h-[560px] w-[980px] -translate-x-1/2 rounded-full bg-emerald-500/12 blur-3xl animate-pulse" />
-      <div className="absolute top-32 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-cyan-500/10 blur-3xl" />
-      <div className="absolute -bottom-48 left-1/2 h-[520px] w-[980px] -translate-x-1/2 rounded-full bg-fuchsia-500/6 blur-3xl" />
+      <div className="absolute -top-44 left-1/2 h-[560px] w-[980px] -translate-x-1/2 rounded-full bg-emerald-500/12 blur-3xl animate-glow-pulse" />
+      <div className="absolute top-32 left-1/2 h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-cyan-500/10 blur-3xl animate-float-slow" />
+      <div className="absolute -bottom-48 left-1/2 h-[520px] w-[980px] -translate-x-1/2 rounded-full bg-fuchsia-500/6 blur-3xl animate-float" />
     </div>
   );
 }

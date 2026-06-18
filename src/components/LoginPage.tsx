@@ -35,7 +35,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
     setLoading(false);
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleConnect();
     }
@@ -53,16 +53,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">
+            <label
+              htmlFor="access-key"
+              className="block text-sm font-medium text-zinc-300 mb-2"
+            >
               Access Key
             </label>
             <input
+              id="access-key"
               type="text"
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyDown}
               placeholder="Enter your key"
               disabled={loading}
+              autoComplete="off"
               className="w-full rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3
                          text-zinc-100 placeholder:text-zinc-500
                          focus:outline-none focus:ring-2 focus:ring-emerald-400/35
@@ -84,6 +89,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             className="w-full rounded-2xl py-4 px-6 text-lg font-bold transition
                        text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/20
                        ring-1 ring-emerald-400/25 active:scale-[0.98]
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60
                        disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Connecting...' : 'Connect'}
@@ -92,7 +98,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
         <div className="mt-6 rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
           <p className="text-xs text-zinc-400 text-center">
-            If you don't have a key, please contact the auction administrator.
+            If you don&apos;t have a key, please contact the auction administrator.
           </p>
         </div>
       </div>

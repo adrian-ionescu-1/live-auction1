@@ -18,34 +18,93 @@ export const metadata: Metadata = {
 
 function SiteFooter() {
   return (
-    <footer className="border-t border-white/10 bg-zinc-950/40">
-      <div className="mx-auto w-full max-w-6xl px-4 py-6 text-xs text-zinc-500 sm:px-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col gap-2">
-            <span>© {new Date().getFullYear()} Auction App • Tournament Draft</span>
+    <footer className="relative border-t border-white/10 bg-zinc-950/50">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
 
-            <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-500">
-              <Link href="/" className="hover:text-zinc-300 transition">
-                Home
-              </Link>
-              <span className="text-zinc-700">•</span>
-              <Link href="/tournaments" className="hover:text-zinc-300 transition">
-                Tournaments
-              </Link>
-              <span className="text-zinc-700">•</span>
-              <Link href="/rules" className="hover:text-zinc-300 transition">
-                Rules
-              </Link>
-              <span className="text-zinc-700">•</span>
-              <Link href="/faq" className="hover:text-zinc-300 transition">
-                FAQ
-              </Link>
-            </div>
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
+        <div className="grid gap-10 md:grid-cols-[1.4fr_1fr_1fr]">
+          {/* Brand */}
+          <div>
+            <Link href="/" className="inline-flex items-center gap-3">
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400/25 to-cyan-400/25 ring-1 ring-white/10">
+                <span className="text-sm font-extrabold tracking-wider">WOT</span>
+                <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-emerald-400/70 blur-[2px]" />
+              </div>
+              <div className="leading-tight">
+                <div className="text-sm font-semibold tracking-wide text-zinc-100">
+                  Auction App
+                </div>
+                <div className="text-xs text-zinc-400">WoT Blitz Tournament Draft</div>
+              </div>
+            </Link>
+
+            <p className="mt-4 max-w-xs text-sm text-zinc-400">
+              An arena-style auction draft for WoT Blitz tournaments — live bidding,
+              fair-play rules and real-time squad building.
+            </p>
           </div>
 
+          {/* Explore */}
+          <div>
+            <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Explore</div>
+            <ul className="mt-4 space-y-2 text-sm">
+              {[
+                { href: "/tournaments", label: "Tournaments" },
+                { href: "/rules", label: "Rules" },
+                { href: "/faq", label: "FAQ" },
+                { href: "/spectator", label: "Spectator" },
+              ].map((l) => (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    className="text-zinc-400 transition hover:text-zinc-100"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Get started */}
+          <div>
+            <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">
+              Get started
+            </div>
+            <ul className="mt-4 space-y-2 text-sm">
+              <li>
+                <Link href="/login" className="text-zinc-400 transition hover:text-zinc-100">
+                  Participant login
+                </Link>
+              </li>
+              <li>
+                <Link href="/login" className="text-zinc-400 transition hover:text-zinc-100">
+                  Enter with access key
+                </Link>
+              </li>
+              <li>
+                <Link href="/spectator" className="text-zinc-400 transition hover:text-zinc-100">
+                  Watch as spectator
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} Auction App • Tournament Draft</span>
+
           <span className="text-zinc-400">
-            Built by <span className="text-zinc-300 font-medium">Adrian</span> — Full-Stack Developer •
-            Discord: <span className="text-emerald-300 font-medium">_the_adrian_</span>
+            Built by{" "}
+            <a
+              href="https://the-adrian-one.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-emerald-300 underline-offset-4 transition hover:text-emerald-200 hover:underline"
+            >
+              The Adrian One
+            </a>{" "}
+            — Full-Stack Developer
           </span>
         </div>
       </div>
@@ -61,7 +120,7 @@ export default function RootLayout({
       <body className={`${inter.className} bg-zinc-950 text-zinc-100`}>
         <SiteBackground />
 
-        {/* Wrapper global ca să ai min height + footer jos */}
+        {/* Global wrapper for min height + footer at the bottom */}
         <div className="min-h-screen flex flex-col">
           <div className="flex-1">{children}</div>
           <SiteFooter />

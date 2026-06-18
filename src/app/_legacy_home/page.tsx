@@ -85,10 +85,10 @@ export default function LegacyHome() {
     <main className="min-h-screen py-8 px-4 relative">
       <BackToHome />
 
-      {/* subtle overlay ca să păstrezi lizibilitatea peste background-ul global */}
+      {/* subtle overlay to keep readability over the global background */}
       <div className="max-w-7xl mx-auto rounded-3xl bg-black/30 ring-1 ring-white/10 backdrop-blur-sm p-6 sm:p-8">
         <div className="mb-8 text-center">
-          <h1 className="text-5xl font-bold text-zinc-100 mb-2">
+          <h1 className="text-3xl font-bold text-zinc-100 mb-2 sm:text-4xl lg:text-5xl">
             Live Auction System
           </h1>
           <p className="text-zinc-300 font-semibold">
