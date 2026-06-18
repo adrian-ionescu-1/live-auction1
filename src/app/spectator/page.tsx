@@ -1,107 +1,22 @@
-import Link from "next/link";
+import type { Metadata } from "next";
+import SiteHeader from "../_components/SiteHeader";
+import CTASection from "../_components/CTASection";
+import Reveal from "../_components/Reveal";
+import { Badge, GlowLink, InfoCard, Divider } from "../_components/ui";
 
-const Badge = ({ children }: { children: React.ReactNode }) => (
-  <span className="inline-flex items-center rounded-full bg-white/5 px-3 py-1 text-xs ring-1 ring-white/10 text-zinc-200">
-    {children}
-  </span>
-);
-
-const GlowLink = ({
-  href,
-  children,
-  glow = "shadow-[0_0_60px_rgba(236,72,153,0.10)]",
-}: {
-  href: string;
-  children: React.ReactNode;
-  glow?: string;
-}) => {
-  return (
-    <Link
-      href={href}
-      className="group relative inline-flex items-center gap-2 rounded-xl bg-white/5 px-4 py-2 ring-1 ring-white/10 text-sm text-zinc-200 hover:bg-white/10 transition active:scale-[0.98]"
-    >
-      <span
-        className={`absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition ${glow}`}
-      />
-      <span className="relative">{children}</span>
-    </Link>
-  );
+export const metadata: Metadata = {
+  title: "Spectator Mode • Auction App",
+  description:
+    "Read-only spectator view of the live draft: follow the timer, current player, highest bid and SOLD / UNSOLD results in real time.",
 };
-
-const Card = ({
-  title,
-  desc,
-  glow = "shadow-[0_0_70px_rgba(236,72,153,0.08)]",
-}: {
-  title: string;
-  desc: string;
-  glow?: string;
-}) => (
-  <div className="group relative rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 hover:bg-white/10 transition">
-    <span
-      className={`pointer-events-none absolute inset-0 rounded-3xl opacity-0 group-hover:opacity-100 transition ${glow}`}
-    />
-    <div className="relative">
-      <div className="text-sm font-semibold">{title}</div>
-      <div className="mt-3 text-sm text-zinc-400">{desc}</div>
-    </div>
-  </div>
-);
 
 export default function SpectatorPage() {
   return (
     <main className="relative min-h-screen text-zinc-100">
-      {/* Sticky Navbar */}
-      <header className="sticky top-0 z-20 border-b border-white/10 bg-zinc-950/60 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/40">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="relative h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-400/25 to-cyan-400/25 ring-1 ring-white/10 flex items-center justify-center">
-              <span className="text-sm font-extrabold tracking-wider">WOT</span>
-              <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-emerald-400/70 blur-[2px]" />
-            </div>
-            <div className="leading-tight">
-              <div className="text-sm font-semibold tracking-wide">Auction App</div>
-              <div className="text-xs text-zinc-400">Spectator</div>
-            </div>
-          </Link>
+      <SiteHeader subtitle="Spectator" />
 
-          <nav className="hidden md:flex items-center gap-6 text-sm text-zinc-300">
-            <Link href="/tournaments" className="hover:text-zinc-100 transition">
-              Tournaments
-            </Link>
-            <Link href="/rules" className="hover:text-zinc-100 transition">
-              Rules
-            </Link>
-            <Link href="/faq" className="hover:text-zinc-100 transition">
-              FAQ
-            </Link>
-            <Link href="/spectator" className="text-zinc-100">
-              Spectator
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="hidden sm:inline text-sm text-zinc-300 hover:text-zinc-100 transition"
-            >
-              Participant login
-            </Link>
-
-            <Link
-              href="/login"
-              className="group relative inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-400/25 bg-emerald-500/15 hover:bg-emerald-500/20 transition active:scale-[0.98]"
-            >
-              <span className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition shadow-[0_0_30px_rgba(16,185,129,0.25)]" />
-              <span className="relative">Enter with Access Key</span>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
       <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-10 pb-16 sm:px-6">
-        <div className="inline-flex flex-wrap items-center gap-2">
+        <div className="inline-flex animate-fade-up flex-wrap items-center gap-2">
           <Badge>SPECTATOR MODE</Badge>
           <Badge>LIVE STATE</Badge>
           <Badge>NO BIDDING</Badge>
@@ -109,9 +24,12 @@ export default function SpectatorPage() {
         </div>
 
         <div className="mt-6 grid gap-10 lg:grid-cols-2 lg:items-start">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
-              Watch the draft like it’s match day
+          <div className="animate-fade-up [animation-delay:80ms]">
+            <h1 className="text-balance text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
+              Watch the draft like it’s{" "}
+              <span className="bg-gradient-to-r from-fuchsia-300 via-cyan-300 to-emerald-300 bg-[length:200%_auto] bg-clip-text text-transparent animate-gradient-pan">
+                match day
+              </span>
             </h1>
             <p className="mt-4 max-w-xl text-zinc-300">
               Spectator mode is a read-only view: you can follow the timer, current
@@ -120,17 +38,17 @@ export default function SpectatorPage() {
 
             <div className="mt-6 flex flex-wrap gap-3">
               <GlowLink href="/tournaments" glow="shadow-[0_0_60px_rgba(34,211,238,0.12)]">
-                Tournament format →
+                Tournament format <span aria-hidden>→</span>
               </GlowLink>
               <GlowLink href="/rules" glow="shadow-[0_0_60px_rgba(16,185,129,0.12)]">
-                Rules →
+                Rules <span aria-hidden>→</span>
               </GlowLink>
               <GlowLink href="/faq" glow="shadow-[0_0_60px_rgba(255,255,255,0.08)]">
-                FAQ →
+                FAQ <span aria-hidden>→</span>
               </GlowLink>
             </div>
 
-            <div className="mt-8 rounded-3xl bg-black/30 ring-1 ring-white/10 p-6">
+            <div className="mt-8 rounded-3xl bg-black/30 p-6 ring-1 ring-white/10">
               <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">
                 What you’ll see
               </div>
@@ -156,7 +74,7 @@ export default function SpectatorPage() {
           </div>
 
           {/* Preview HUD */}
-          <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 sm:p-8">
+          <div className="rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 sm:p-8">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm font-semibold tracking-wide">SPECTATOR HUD</div>
@@ -167,10 +85,10 @@ export default function SpectatorPage() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
+            <div className="mt-6 rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
               <div className="flex items-center justify-between text-xs text-zinc-400">
                 <span>Now auctioning</span>
-                <span className="font-semibold text-zinc-200 tabular-nums">00:18</span>
+                <span className="font-semibold tabular-nums text-zinc-200">00:18</span>
               </div>
 
               <div className="mt-3 flex items-end justify-between">
@@ -184,16 +102,16 @@ export default function SpectatorPage() {
                 </div>
               </div>
 
-              <div className="mt-5 h-2 w-full rounded-full bg-white/5 ring-1 ring-white/10 overflow-hidden">
+              <div className="mt-5 h-2 w-full overflow-hidden rounded-full bg-white/5 ring-1 ring-white/10">
                 <div className="h-full w-[70%] bg-gradient-to-r from-fuchsia-400/45 via-cyan-400/45 to-emerald-400/45" />
               </div>
 
               <div className="mt-4 grid gap-2 text-xs">
-                <div className="rounded-xl bg-white/5 ring-1 ring-white/10 p-3 flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
                   <span className="text-zinc-400">Status</span>
                   <span className="font-semibold text-zinc-100">IN PROGRESS</span>
                 </div>
-                <div className="rounded-xl bg-white/5 ring-1 ring-white/10 p-3 flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
                   <span className="text-zinc-400">Last event</span>
                   <span className="font-semibold text-zinc-100">Bid placed</span>
                 </div>
@@ -201,14 +119,14 @@ export default function SpectatorPage() {
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
+              <div className="rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
                 <div className="text-xs text-zinc-400">Read-only</div>
                 <div className="mt-1 text-sm font-semibold">No bidding controls</div>
                 <div className="mt-1 text-xs text-zinc-400">
                   Spectators cannot change auction state.
                 </div>
               </div>
-              <div className="rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
+              <div className="rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
                 <div className="text-xs text-zinc-400">Tournament clarity</div>
                 <div className="mt-1 text-sm font-semibold">Clean results</div>
                 <div className="mt-1 text-xs text-zinc-400">
@@ -219,61 +137,41 @@ export default function SpectatorPage() {
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="mt-10 h-px w-full bg-gradient-to-r from-transparent via-fuchsia-400/25 to-transparent" />
+        <div className="mt-10">
+          <Divider via="via-fuchsia-400/25" />
+        </div>
 
         {/* Cards */}
-        <div className="mt-10 grid gap-6 md:grid-cols-3">
-          <Card
+        <Reveal className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <InfoCard
             title="Live updates"
             desc="Follow bids and timer changes instantly as they happen in the draft."
             glow="shadow-[0_0_70px_rgba(34,211,238,0.10)]"
           />
-          <Card
+          <InfoCard
             title="Results clarity"
             desc="See SOLD / UNSOLD outcomes and re-auction transitions clearly."
             glow="shadow-[0_0_70px_rgba(236,72,153,0.10)]"
           />
-          <Card
+          <InfoCard
             title="Tournament story"
             desc="Understand how teams are building rosters and managing budget in real time."
             glow="shadow-[0_0_70px_rgba(16,185,129,0.08)]"
           />
-        </div>
+        </Reveal>
 
-        {/* CTA */}
-        <div className="mt-12 rounded-3xl bg-gradient-to-r from-fuchsia-500/10 via-cyan-500/10 to-emerald-500/10 ring-1 ring-white/10 p-7 sm:p-10">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-2xl font-extrabold">
-                Want to participate instead?
-              </div>
-              <div className="mt-2 text-sm text-zinc-300">
-                Participants enter using an access key provided by the tournament organizer.
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <GlowLink href="/tournaments" glow="shadow-[0_0_60px_rgba(34,211,238,0.12)]">
-                  Tournament format →
-                </GlowLink>
-                <GlowLink href="/rules" glow="shadow-[0_0_60px_rgba(16,185,129,0.12)]">
-                  Rules →
-                </GlowLink>
-                <GlowLink href="/faq" glow="shadow-[0_0_60px_rgba(255,255,255,0.08)]">
-                  FAQ →
-                </GlowLink>
-              </div>
-            </div>
-
-            <Link
-              href="/login"
-              className="group relative inline-flex items-center justify-center rounded-2xl px-7 py-3 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-400/25 bg-emerald-500/15 hover:bg-emerald-500/20 transition active:scale-[0.98]"
-            >
-              <span className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition shadow-[0_0_70px_rgba(16,185,129,0.18)]" />
-              <span className="relative">Enter Auction</span>
-            </Link>
-          </div>
-        </div>
+        <Reveal className="mt-12">
+          <CTASection
+            title="Want to participate instead?"
+            subtitle="Participants enter using an access key provided by the tournament organizer."
+            gradient="from-fuchsia-500/10 via-cyan-500/10 to-emerald-500/10"
+            links={[
+              { href: "/tournaments", label: "Tournament format", glow: "shadow-[0_0_60px_rgba(34,211,238,0.12)]" },
+              { href: "/rules", label: "Rules", glow: "shadow-[0_0_60px_rgba(16,185,129,0.12)]" },
+              { href: "/faq", label: "FAQ", glow: "shadow-[0_0_60px_rgba(255,255,255,0.08)]" },
+            ]}
+          />
+        </Reveal>
       </section>
     </main>
   );

@@ -29,7 +29,7 @@ export default function BidControls() {
 
   const isActive = status === 'active';
 
-  // după ce ai lua player-ul curent, câte sloturi mai rămân?
+  // after winning the current player, how many slots are left?
   const remainingAfterWin = Math.max(0, TARGET_PLAYERS - (wonCount + 1));
   const requiredAfterWin = remainingAfterWin * MIN_PLAYER_COST;
 
