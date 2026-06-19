@@ -115,7 +115,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-zinc-950 text-zinc-100`}>
+      <body className={`${inter.className} bg-[#05080a] text-zinc-100`}>
         <SiteBackground />
 
         {/* Global wrapper for min height + footer at the bottom */}

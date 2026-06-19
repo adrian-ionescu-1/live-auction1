@@ -37,6 +37,9 @@ let auctionStateChannel: RealtimeChannel | null = null;
 let bidsChannel: RealtimeChannel | null = null;
 let usersChannel: RealtimeChannel | null = null;
 let playersChannel: RealtimeChannel | null = null;
+// Realtime presence: tracks which users currently have the app open so the
+// admin "Squad Overview" shows only people who are connected right now.
+let presenceChannel: RealtimeChannel | null = null;
 
 // Universal deadline clock — runs on EVERY client (not just the admin). It only
 // computes the displayed countdown from phase_ends_at and, when the deadline
@@ -81,6 +84,9 @@ interface AuctionStoreState extends AuctionState {
   // Server deadline for the current phase (ms epoch), used to render the timer
   // locally so it never depends on a single browser tab ticking.
   phaseEndsAt: number | null;
+  // IDs of users currently connected (Realtime presence). Drives the admin's
+  // live "who's online" view.
+  onlineUserIds: string[];
   login: (userId: string, role: UserRole) => Promise<void>;
   logout: () => void;
   startAuction: () => Promise<void>;
@@ -109,6 +115,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   countdown: COUNTDOWN_DURATION,
   timeRemaining: AUCTION_DURATION,
   phaseEndsAt: null,
+  onlineUserIds: [],
   currentHighestBid: null,
   bidHistory: [],
   resultMessage: null,
@@ -183,6 +190,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       countdown: COUNTDOWN_DURATION,
       timeRemaining: AUCTION_DURATION,
       phaseEndsAt: null,
+      onlineUserIds: [],
       currentHighestBid: null,
       bidHistory: [],
       resultMessage: null,
@@ -368,6 +376,36 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       )
       .subscribe();
 
+    // 5) PRESENCE CHANNEL (who is connected right now)
+    // Each tab "tracks" itself keyed by its userId. presenceState() then lists
+    // every connected userId; when a tab closes/logs out, Realtime fires a
+    // leave + sync so the admin's Squad Overview drops them automatically.
+    {
+      const userId = get().currentUserId;
+      const role = get().currentUserRole;
+
+      if (userId) {
+        presenceChannel = supabase.channel('auction-presence', {
+          config: { presence: { key: userId } },
+        });
+
+        const syncOnline = () => {
+          const state = presenceChannel?.presenceState() ?? {};
+          set({ onlineUserIds: Object.keys(state) });
+        };
+
+        presenceChannel
+          .on('presence', { event: 'sync' }, syncOnline)
+          .on('presence', { event: 'join' }, syncOnline)
+          .on('presence', { event: 'leave' }, syncOnline)
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              void presenceChannel?.track({ userId, role, online_at: Date.now() });
+            }
+          });
+      }
+    }
+
     // ── Universal deadline clock (all clients) ──────────────────
     // Renders the countdown locally from phase_ends_at and drives the
     // server-side phase advance when the deadline passes.
@@ -412,6 +450,11 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     if (playersChannel) {
       supabase.removeChannel(playersChannel);
       playersChannel = null;
+    }
+    if (presenceChannel) {
+      void presenceChannel.untrack();
+      supabase.removeChannel(presenceChannel);
+      presenceChannel = null;
     }
     if (clockInterval) {
       clearInterval(clockInterval);

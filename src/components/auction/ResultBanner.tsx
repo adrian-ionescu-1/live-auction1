@@ -19,8 +19,22 @@ export default function ResultBanner() {
 
   return (
     <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl animate-scale-in rounded-3xl bg-black/35 p-6 text-center ring-1 ring-white/10 backdrop-blur-sm sm:p-8">
-        <div className="mb-4">
+      <div className="w-full max-w-2xl animate-scale-in">
+      <div
+        className={`relative rounded-3xl bg-[length:200%_200%] p-px animate-gradient-pan ${
+          isSold
+            ? "bg-gradient-to-br from-emerald-400/50 via-cyan-400/30 to-emerald-400/50 shadow-[0_0_90px_rgba(16,185,129,0.22)]"
+            : "bg-gradient-to-br from-amber-400/50 via-orange-400/30 to-amber-400/50 shadow-[0_0_90px_rgba(251,191,36,0.18)]"
+        }`}
+      >
+      <div className="relative overflow-hidden rounded-[23px] bg-black/60 p-6 text-center ring-1 ring-white/5 backdrop-blur-md sm:p-8">
+        {/* Celebratory radial burst behind the verdict */}
+        <span
+          className={`pointer-events-none absolute left-1/2 top-10 h-48 w-48 -translate-x-1/2 rounded-full blur-2xl animate-glow-pulse ${
+            isSold ? "bg-emerald-400/20" : "bg-amber-400/15"
+          }`}
+        />
+        <div className="relative mb-4">
           {isSold ? (
             <h2 className="animate-pop bg-gradient-to-r from-emerald-300 via-emerald-200 to-cyan-300 bg-clip-text text-4xl font-extrabold text-transparent drop-shadow-[0_0_25px_rgba(16,185,129,0.35)] sm:text-5xl">
               SOLD!
@@ -62,6 +76,8 @@ export default function ResultBanner() {
             />
           </div>
         </div>
+      </div>
+      </div>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import SiteHeader from "./_components/SiteHeader";
 import CTASection from "./_components/CTASection";
 import Reveal from "./_components/Reveal";
 import PlayerShowcaseCard from "./_components/PlayerShowcaseCard";
-import { GlowLink, PrimaryLink, InfoCard, Divider } from "./_components/ui";
+import { GlowLink, PrimaryLink, InfoCard, Divider, GradientCard } from "./_components/ui";
 import {
   TICKER,
   STATS,
@@ -102,7 +102,9 @@ export default function HomeLanding() {
 
           {/* Right: Arena HUD card */}
           <div className="relative animate-fade-up [animation-delay:120ms]">
-            <div className="relative rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 sm:p-8 lg:animate-float-slow">
+            <div className="lg:animate-float-slow">
+            <div className="group relative rounded-3xl bg-gradient-to-br from-emerald-400/40 via-cyan-400/25 to-fuchsia-400/40 bg-[length:200%_200%] p-px shadow-[0_0_80px_rgba(16,185,129,0.10)] animate-gradient-pan">
+            <div className="relative overflow-hidden rounded-[23px] bg-zinc-950/70 p-6 ring-1 ring-white/5 backdrop-blur-xl sm:p-8">
               <div className="pointer-events-none absolute inset-0 rounded-3xl">
                 <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-emerald-500/10 blur-2xl" />
                 <div className="absolute -bottom-12 -left-12 h-44 w-44 rounded-full bg-cyan-500/10 blur-2xl" />
@@ -170,6 +172,8 @@ export default function HomeLanding() {
                 </GlowLink>
               </div>
             </div>
+            </div>
+            </div>
           </div>
         </div>
       </section>
@@ -191,12 +195,12 @@ export default function HomeLanding() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {STATS.map((s, i) => (
             <Reveal key={s.k} delay={i * 80}>
-              <div className="rounded-3xl bg-white/5 p-5 text-center ring-1 ring-white/10">
-                <div className="bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-3xl font-extrabold text-transparent sm:text-4xl">
+              <GradientCard className="items-center p-5 text-center">
+                <div className="bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-3xl font-extrabold text-transparent transition group-hover:from-emerald-200 group-hover:to-cyan-200 sm:text-4xl">
                   {s.v}
                 </div>
                 <div className="mt-1 text-xs text-zinc-400">{s.k}</div>
-              </div>
+              </GradientCard>
             </Reveal>
           ))}
         </div>
@@ -222,21 +226,18 @@ export default function HomeLanding() {
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {STEPS.map((s, i) => (
             <Reveal key={s.n} delay={i * 90}>
-              <div className="group relative h-full overflow-hidden rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 transition hover:bg-white/10">
-                <span
-                  className={`pointer-events-none absolute inset-0 rounded-3xl opacity-0 transition group-hover:opacity-100 ${s.glow}`}
-                />
-                <div className="relative">
-                  <div className="flex items-center justify-between">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 text-emerald-200 ring-1 ring-white/10 transition group-hover:scale-110">
-                      <StepIcon>{s.icon}</StepIcon>
-                    </div>
-                    <span className="text-2xl font-extrabold text-white/10">{s.n}</span>
+              <GradientCard className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 text-emerald-200 ring-1 ring-white/10 transition duration-300 group-hover:scale-110 group-hover:from-emerald-400/30 group-hover:to-cyan-400/30">
+                    <StepIcon>{s.icon}</StepIcon>
                   </div>
-                  <div className="mt-4 text-sm font-semibold">{s.title}</div>
-                  <div className="mt-2 text-sm text-zinc-400">{s.desc}</div>
+                  <span className="text-2xl font-extrabold text-white/10 transition group-hover:text-white/20">
+                    {s.n}
+                  </span>
                 </div>
-              </div>
+                <div className="mt-4 text-sm font-semibold">{s.title}</div>
+                <div className="mt-2 text-sm text-zinc-400">{s.desc}</div>
+              </GradientCard>
             </Reveal>
           ))}
         </div>
@@ -299,7 +300,7 @@ export default function HomeLanding() {
         <div className="mt-6 grid gap-5 sm:grid-cols-2 md:grid-cols-3">
           {FEATURES.map((f, i) => (
             <Reveal key={f.title} delay={i * 90}>
-              <div className="group h-full rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 transition hover:bg-white/10 hover:shadow-[0_0_70px_rgba(16,185,129,0.07)]">
+              <GradientCard className="p-6">
                 <div className="text-sm font-semibold">{f.title}</div>
                 <div className="mt-3 text-sm text-zinc-400">{f.desc}</div>
                 <div className="mt-5">
@@ -310,7 +311,7 @@ export default function HomeLanding() {
                     {f.cta}
                   </GlowLink>
                 </div>
-              </div>
+              </GradientCard>
             </Reveal>
           ))}
         </div>
