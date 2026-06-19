@@ -14,10 +14,10 @@ export default function ResultBanner() {
   const pct = ((3 - countdown) / 3) * 100;
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="w-full max-w-2xl text-center rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm p-8 animate-pulse">
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl animate-scale-in rounded-3xl bg-black/35 p-6 text-center ring-1 ring-white/10 backdrop-blur-sm sm:p-8">
         <div className="mb-4">
-          <h2 className="text-5xl font-extrabold text-emerald-300 mb-2">
+          <h2 className="animate-pop bg-gradient-to-r from-emerald-300 via-emerald-200 to-cyan-300 bg-clip-text text-4xl font-extrabold text-transparent drop-shadow-[0_0_25px_rgba(16,185,129,0.35)] sm:text-5xl">
             SOLD!
           </h2>
         </div>

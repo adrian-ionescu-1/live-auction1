@@ -46,6 +46,15 @@ const config: Config = {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-50%)" },
         },
+        "scale-in": {
+          "0%": { opacity: "0", transform: "scale(0.95)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        "pop": {
+          "0%": { transform: "scale(0.8)", opacity: "0" },
+          "60%": { transform: "scale(1.05)", opacity: "1" },
+          "100%": { transform: "scale(1)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.7s cubic-bezier(0.22,1,0.36,1) both",
@@ -56,6 +65,8 @@ const config: Config = {
         "gradient-pan": "gradient-pan 8s ease infinite",
         "glow-pulse": "glow-pulse 4s ease-in-out infinite",
         ticker: "ticker 28s linear infinite",
+        "scale-in": "scale-in 0.25s cubic-bezier(0.22,1,0.36,1) both",
+        pop: "pop 0.45s cubic-bezier(0.22,1,0.36,1) both",
       },
     },
   },

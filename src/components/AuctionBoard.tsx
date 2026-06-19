@@ -45,12 +45,12 @@ export default function AuctionBoard() {
     }
 
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center rounded-3xl bg-white/5 ring-1 ring-white/10 p-8">
-          <h2 className="text-3xl font-extrabold text-zinc-100 mb-3">
+      <div className="flex min-h-[300px] items-center justify-center sm:min-h-[400px]">
+        <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 p-6 text-center ring-1 ring-white/10 sm:p-8">
+          <h2 className="mb-3 text-2xl font-extrabold text-zinc-100 sm:text-3xl">
             {message}
           </h2>
-          {sub && <p className="text-zinc-400">{sub}</p>}
+          {sub && <p className="text-sm text-zinc-400 sm:text-base">{sub}</p>}
         </div>
       </div>
     );
@@ -59,8 +59,8 @@ export default function AuctionBoard() {
   const resultMessage = useAuctionStore.getState().resultMessage;
 
   return (
-    <div className="flex flex-col items-center gap-6">
-      <div className="w-full max-w-md">
+    <div className="flex w-full flex-col items-center gap-6">
+      <div className="w-full max-w-md animate-fade-up">
         {status === 'countdown' && countdown > 0 && (
           <div className="rounded-3xl p-8 text-center ring-1 ring-white/10 bg-amber-500/15">
             <p className="text-sm font-semibold text-amber-200 mb-2">
@@ -110,7 +110,7 @@ export default function AuctionBoard() {
 
       <PlayerCard player={currentPlayer} />
 
-      <div className="w-full max-w-md rounded-3xl bg-white/5 ring-1 ring-white/10 p-4">
+      <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 ring-1 ring-white/10 p-4 [animation-delay:120ms]">
         <div className="flex justify-between text-sm text-zinc-400 mb-2">
           <span>
             {currentRound === 1

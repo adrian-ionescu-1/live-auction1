@@ -77,7 +77,7 @@ export default function BidControls() {
 
   if (currentUserRole === 'ADMIN' || currentUserRole === 'SPECTATOR') {
     return (
-      <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 max-w-md w-full">
+      <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6">
         <h3 className="text-base font-extrabold tracking-wide text-zinc-100 mb-4">
           Bidding
         </h3>
@@ -97,7 +97,7 @@ export default function BidControls() {
   }
 
   return (
-    <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 max-w-md w-full">
+    <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6">
       <h3 className="text-base font-extrabold tracking-wide text-zinc-100 mb-4">
         Place Your Bid
       </h3>
@@ -167,10 +167,10 @@ export default function BidControls() {
                   key={increment}
                   onClick={() => handlePresetBid(increment)}
                   disabled={!canBid || !canAfford}
-                  className={`rounded-2xl py-4 px-3 font-extrabold transition ring-1 active:scale-[0.98]
+                  className={`rounded-2xl py-4 px-3 font-extrabold transition ring-1 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60
                     ${
                       canAfford
-                        ? 'bg-emerald-500/15 hover:bg-emerald-500/20 text-emerald-200 ring-emerald-400/25'
+                        ? 'bg-emerald-500/15 hover:bg-emerald-500/20 hover:scale-[1.03] text-emerald-200 ring-emerald-400/25'
                         : 'bg-white/5 text-zinc-500 ring-white/10 cursor-not-allowed opacity-70'
                     }`}
                 >
