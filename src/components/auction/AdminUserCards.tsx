@@ -5,20 +5,39 @@ import TargetProgress from './TargetProgress';
 import { TARGET_PLAYERS, calcReserve } from '@/config/auctionRules';
 
 export default function AdminUserCards() {
-  const { currentUserRole, users } = useAuctionStore();
+  const { currentUserRole, users, onlineUserIds } = useAuctionStore();
 
   if (currentUserRole !== 'ADMIN') {
     return null;
   }
 
-  const regularUsers = users.filter((u) => u.role === 'USER');
+  // Only show participants who are connected right now (Realtime presence).
+  const online = new Set(onlineUserIds);
+  const regularUsers = users.filter((u) => u.role === 'USER' && online.has(u.id));
 
   return (
     <div className="w-full rounded-3xl bg-white/5 ring-1 ring-white/10 p-5 sm:p-6">
-      <h3 className="text-xl sm:text-2xl font-extrabold text-zinc-100 mb-6">
-        User Squad Overview
-      </h3>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-xl sm:text-2xl font-extrabold text-zinc-100">
+          User Squad Overview
+        </h3>
+        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-semibold text-emerald-200 ring-1 ring-emerald-400/25">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+          </span>
+          {regularUsers.length} online
+        </span>
+      </div>
 
+      {regularUsers.length === 0 ? (
+        <div className="rounded-2xl bg-black/25 ring-1 ring-white/10 p-8 text-center">
+          <p className="text-sm font-semibold text-zinc-300">No participants connected</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Users appear here in real time when they join, and disappear when they leave.
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {regularUsers.map((user, idx) => {
           const wonPlayers = user.wonPlayers || [];
@@ -125,6 +144,7 @@ export default function AdminUserCards() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
