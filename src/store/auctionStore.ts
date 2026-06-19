@@ -64,6 +64,20 @@ async function driveAuctionTick() {
   }
 }
 
+// Human-readable outcome shown when a player is settled (SOLD / UNSOLD).
+function buildOutcomeMessage(
+  playerName: string,
+  isSold: boolean,
+  winningBid: Bid | null
+): string {
+  if (isSold) {
+    return winningBid
+      ? `${playerName} — SOLD to ${winningBid.username} for $${winningBid.amount.toLocaleString()}`
+      : `${playerName} — SOLD`;
+  }
+  return `${playerName} — UNSOLD · no bids, goes back to re-auction`;
+}
+
 interface AuctionStoreState extends AuctionState {
   // Server deadline for the current phase (ms epoch), used to render the timer
   // locally so it never depends on a single browser tab ticking.
@@ -236,6 +250,20 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
               ? new Date(newState.phase_ends_at).getTime()
               : null;
 
+          // Build the SOLD/UNSOLD outcome message when entering the result phase.
+          const nextSoldPlayers = (newState.sold_players as string[]) ?? state.soldPlayers;
+          let nextResultMessage = state.resultMessage;
+          if (nextStatus === 'result' && currentPlayer) {
+            const isSold = nextSoldPlayers.includes(currentPlayer.id);
+            nextResultMessage = buildOutcomeMessage(
+              currentPlayer.name,
+              isSold,
+              state.currentHighestBid
+            );
+          } else if (nextStatus === 'countdown') {
+            nextResultMessage = null;
+          }
+
           set((s) => ({
             status: nextStatus,
             currentPlayerIndex: (newState.current_player_index as number) ?? s.currentPlayerIndex,
@@ -243,6 +271,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             timeRemaining: (newState.time_remaining as number) ?? s.timeRemaining,
             countdown: (newState.countdown as number) ?? s.countdown,
             phaseEndsAt: nextPhaseEndsAt,
+            resultMessage: nextResultMessage,
             currentRound: (newState.current_round as number) ?? s.currentRound,
             roundTotalPlayers: (newState.round_total_players as number) ?? s.roundTotalPlayers,
             roundCurrentIndex: (newState.round_current_index as number) ?? s.roundCurrentIndex,
@@ -525,14 +554,23 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         currentHighestBid = null;
       }
 
+      const status = (auctionState.status as AuctionStatus) ?? get().status;
+      const cp = get().currentPlayer;
+      let resultMessage = get().resultMessage;
+      if (status === 'result' && cp) {
+        const isSold = (auctionState.sold_players ?? []).includes(cp.id);
+        resultMessage = buildOutcomeMessage(cp.name, isSold, currentHighestBid);
+      }
+
       set({
         users,
         soldPlayers: auctionState.sold_players ?? [],
         unsoldrPlayers: auctionState.unsold_players ?? [],
-        status: (auctionState.status as AuctionStatus) ?? get().status,
+        status,
         phaseEndsAt: auctionState.phase_ends_at
           ? new Date(auctionState.phase_ends_at).getTime()
           : null,
+        resultMessage,
         currentRound: auctionState.current_round ?? get().currentRound,
         roundTotalPlayers: auctionState.round_total_players ?? get().roundTotalPlayers,
         roundCurrentIndex: auctionState.round_current_index ?? get().roundCurrentIndex,
