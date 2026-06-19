@@ -1,5 +1,3 @@
-// src/services/auctionEngine.ts
-
 import { Player, User, WonPlayer } from '@/types/auction.types';
 import { supabase } from '@/lib/supabase';
 

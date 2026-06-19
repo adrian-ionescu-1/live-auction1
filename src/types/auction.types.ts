@@ -1,5 +1,3 @@
-// src/types/auction.types.ts
-
 export type UserRole = 'ADMIN' | 'USER' | 'SPECTATOR';
 
 export interface User {

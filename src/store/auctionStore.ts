@@ -1,4 +1,3 @@
-// src/store/auctionStore.ts
 //
 // ─── ARCHITECTURE RULES enforced in this file ─────────────────
 //

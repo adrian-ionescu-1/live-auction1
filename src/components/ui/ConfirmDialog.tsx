@@ -1,5 +1,3 @@
-// src/components/ConfirmDialog.tsx
-
 'use client';
 
 interface ConfirmDialogProps {

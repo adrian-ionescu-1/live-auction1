@@ -1,4 +1,3 @@
-// src/app/_components/PlayerShowcaseCard.tsx
 //
 // FIFA-style player card used in the visitor-facing "draft board" preview.
 // Purely presentational (mock data) — gives visitors a feel for what gets

@@ -1,5 +1,3 @@
-// src/app/_components/SiteBackground.tsx
-
 export default function SiteBackground() {
   return (
     <div className="pointer-events-none fixed inset-0 -z-10">

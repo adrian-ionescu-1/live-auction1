@@ -1,4 +1,3 @@
-// src/app/_components/ui.tsx
 //
 // Shared presentational primitives used across the marketing/static pages.
 // Keeping them in one place removes the heavy duplication that previously

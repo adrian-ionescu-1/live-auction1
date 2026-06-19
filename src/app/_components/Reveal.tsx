@@ -1,4 +1,3 @@
-// src/app/_components/Reveal.tsx
 //
 // Lightweight scroll-reveal wrapper. Fades + lifts its children into view the
 // first time they enter the viewport. Honors prefers-reduced-motion globally

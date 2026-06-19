@@ -160,9 +160,19 @@ async function verify() {
     .from('players')
     .select('id, name, sold_to_user_id, sold_amount')
     .not('sold_to_user_id', 'is', null);
-  const { data: allBids } = await supabase
-    .from('bids')
-    .select('player_id, user_id, amount, created_at');
+  // Fetch ALL bids with pagination (Supabase caps a select at 1000 rows).
+  const allBids = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await supabase
+      .from('bids')
+      .select('player_id, user_id, amount, created_at, id')
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (!data || data.length === 0) break;
+    allBids.push(...data);
+    if (data.length < PAGE) break;
+  }
 
   // expected winner per player: highest amount, earliest created_at (settle rule)
   const bestByPlayer = new Map();
