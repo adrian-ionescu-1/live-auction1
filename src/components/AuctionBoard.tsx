@@ -22,7 +22,24 @@ export default function AuctionBoard() {
 
   useEffect(() => {
     initializeRealtime();
+
+    // FIX F3: anti-drift heartbeat. Realtime can drop events under load (Free
+    // tier), so periodically — and whenever the tab regains focus — re-read the
+    // DB to repair stale balances / "won X of Y" / highest bid.
+    const heartbeat = setInterval(() => {
+      useAuctionStore.getState().reconcile();
+    }, 5000);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        useAuctionStore.getState().reconcile();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
+      clearInterval(heartbeat);
+      document.removeEventListener('visibilitychange', onVisible);
       cleanupRealtime();
     };
   }, [initializeRealtime, cleanupRealtime]);

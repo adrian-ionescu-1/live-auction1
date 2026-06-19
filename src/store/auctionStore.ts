@@ -55,6 +55,7 @@ interface AuctionStoreState extends AuctionState {
   tick: () => Promise<void>;
   reset: () => Promise<void>;
   dismissResults: () => void;
+  reconcile: () => Promise<void>;
   initializeRealtime: () => void;
   cleanupRealtime: () => void;
 }
@@ -265,8 +266,13 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             timestamp: new Date(newBid.created_at as string).getTime(),
           };
 
+          // FIX F1: realtime delivery order is not guaranteed under load, so a
+          // late/lower bid must not overwrite a higher one. Keep the max.
           set((s) => ({
-            currentHighestBid: bid,
+            currentHighestBid:
+              !s.currentHighestBid || bid.amount > s.currentHighestBid.amount
+                ? bid
+                : s.currentHighestBid,
             bidHistory: [...s.bidHistory, bid],
           }));
         }
@@ -483,6 +489,60 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   // ── dismissResults ─────────────────────────────────────────
   dismissResults: () => {
     set({ status: 'idle' });
+  },
+
+  // ── reconcile (anti-drift heartbeat) ───────────────────────
+  // Periodically (and on reconnect / tab focus) re-read the DB to repair any
+  // realtime events dropped under load. Does NOT touch the live timer fields
+  // (time_remaining / countdown) to avoid fighting the ticker.
+  reconcile: async () => {
+    if (!get().currentUserId) return;
+
+    try {
+      const auctionState = await AuctionEngine.getAuctionState();
+      if (!auctionState) return;
+
+      const soldPlayerIds: string[] = auctionState.sold_players ?? [];
+      const users = await AuctionEngine.loadUsers(soldPlayerIds);
+
+      // Authoritative highest bid comes from auction_state.current_highest_bid_id
+      let currentHighestBid = get().currentHighestBid;
+      const highestBidId = (auctionState.current_highest_bid_id as string | null) ?? null;
+
+      if (highestBidId) {
+        const { data: bidRow } = await supabase
+          .from('bids')
+          .select('amount, user_id, created_at')
+          .eq('id', highestBidId)
+          .maybeSingle();
+
+        if (bidRow) {
+          const uid = bidRow.user_id as string;
+          const u = users.find((x) => x.id === uid);
+          currentHighestBid = {
+            userId: uid,
+            username: u?.username ?? get().currentHighestBid?.username ?? 'Unknown',
+            amount: bidRow.amount as number,
+            timestamp: new Date(bidRow.created_at as string).getTime(),
+          };
+        }
+      } else {
+        currentHighestBid = null;
+      }
+
+      set({
+        users,
+        soldPlayers: auctionState.sold_players ?? [],
+        unsoldrPlayers: auctionState.unsold_players ?? [],
+        status: (auctionState.status as AuctionStatus) ?? get().status,
+        currentRound: auctionState.current_round ?? get().currentRound,
+        roundTotalPlayers: auctionState.round_total_players ?? get().roundTotalPlayers,
+        roundCurrentIndex: auctionState.round_current_index ?? get().roundCurrentIndex,
+        currentHighestBid,
+      });
+    } catch (e) {
+      console.error('reconcile error:', e);
+    }
   },
 }));
 
