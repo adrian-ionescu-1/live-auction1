@@ -15,7 +15,7 @@ export default function BidHistory() {
   const recentBids = bidHistory.slice(-5).reverse();
 
   return (
-    <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 max-w-md w-full">
+    <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6">
       <h3 className="text-base font-extrabold tracking-wide text-zinc-100 mb-4">
         Recent Bids
       </h3>
@@ -30,7 +30,7 @@ export default function BidHistory() {
               className={`flex justify-between items-center p-3 rounded-2xl ring-1 transition
                 ${
                   isLatest
-                    ? 'bg-emerald-500/12 ring-emerald-400/25 shadow-[0_0_25px_rgba(16,185,129,0.15)]'
+                    ? 'bg-emerald-500/12 ring-emerald-400/25 shadow-[0_0_25px_rgba(16,185,129,0.15)] animate-fade-up'
                     : 'bg-black/30 ring-white/10'
                 }`}
             >

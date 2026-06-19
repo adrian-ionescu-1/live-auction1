@@ -64,17 +64,20 @@ export default function PlayerCard({ player }: PlayerCardProps) {
 
   return (
     <div
-      className={`relative rounded-3xl overflow-hidden max-w-md w-full ring-1 ring-white/10 ${glowClass}`}
+      className={`group relative w-full max-w-md animate-fade-up overflow-hidden rounded-3xl ring-1 ring-white/10 transition duration-300 hover:-translate-y-1 ${glowClass}`}
     >
       {/* Top / Visual */}
-      <div className={`relative h-80 ${bgClass} flex items-center justify-center`}>
+      <div className={`relative h-72 sm:h-80 ${bgClass} flex items-center justify-center`}>
         {/* dark vignette for readability */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,#00000000_0%,#00000080_70%,#000000cc_100%)]" />
+
+        {/* Shine sweep on hover */}
+        <div className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/10 to-transparent transition duration-700 group-hover:translate-x-full" />
 
         {/* Military Olive Tank */}
         <svg
           viewBox="0 0 200 120"
-          className="relative w-64 h-40"
+          className="relative h-40 w-64 animate-float drop-shadow-[0_8px_20px_rgba(0,0,0,0.4)]"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >

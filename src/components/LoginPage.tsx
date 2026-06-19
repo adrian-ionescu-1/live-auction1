@@ -43,12 +43,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm p-8 sm:p-10">
+      <div className="w-full max-w-md animate-fade-up rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm p-6 sm:p-10">
         <div className="text-center mb-8">
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-zinc-100 mb-2">
-            Welcome to the Auction
+          <div className="relative mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400/25 to-cyan-400/25 ring-1 ring-white/10">
+            <span className="text-base font-extrabold tracking-wider">WOT</span>
+            <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-emerald-400/70 blur-[2px] animate-glow-pulse" />
+          </div>
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-zinc-100 mb-2">
+            Welcome to the{" "}
+            <span className="bg-gradient-to-r from-emerald-300 via-cyan-300 to-fuchsia-300 bg-[length:200%_auto] bg-clip-text text-transparent animate-gradient-pan">
+              Auction
+            </span>
           </h1>
-          <p className="text-zinc-300">Enter your access key to continue</p>
+          <p className="text-sm text-zinc-300 sm:text-base">
+            Enter your access key to continue
+          </p>
         </div>
 
         <div className="space-y-4">

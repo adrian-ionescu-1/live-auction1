@@ -15,15 +15,15 @@ export default function ResultsView({ onClose }: ResultsViewProps) {
 
   return (
     /* fixed overlay — same z / backdrop pattern used by ResultBanner & ConfirmDialog */
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto relative rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className="relative max-h-[90vh] w-full max-w-4xl animate-scale-in overflow-y-auto rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm">
 
         {/* close button — top-right corner */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full
+          className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full
                      bg-white/5 ring-1 ring-white/10 text-zinc-300 hover:text-zinc-100
-                     hover:bg-white/10 transition z-10"
+                     hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
           aria-label="Close"
         >
           ❌
@@ -68,8 +68,9 @@ export default function ResultsView({ onClose }: ResultsViewProps) {
                 return (
                   <div
                     key={user.id}
-                    className={`group relative rounded-3xl p-6 transition
-                      bg-white/5 ring-1 ring-white/10 hover:bg-white/10 ${podiumGlow}`}
+                    style={{ animationDelay: `${Math.min(index, 8) * 70}ms` }}
+                    className={`group relative animate-fade-up rounded-3xl p-6 transition
+                      bg-white/5 ring-1 ring-white/10 hover:-translate-y-1 hover:bg-white/10 ${podiumGlow}`}
                   >
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3 min-w-0">

@@ -16,13 +16,13 @@ export default function AdminUserCards() {
   const regularUsers = users.filter((u) => u.role === 'USER');
 
   return (
-    <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 w-full">
+    <div className="w-full rounded-3xl bg-white/5 ring-1 ring-white/10 p-5 sm:p-6">
       <h3 className="text-xl sm:text-2xl font-extrabold text-zinc-100 mb-6">
         User Squad Overview
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {regularUsers.map((user) => {
+        {regularUsers.map((user, idx) => {
           const wonPlayers = user.wonPlayers || [];
           const wonCount = wonPlayers.length;
 
@@ -38,7 +38,8 @@ export default function AdminUserCards() {
           return (
             <div
               key={user.id}
-              className={`rounded-2xl p-4 transition ring-1 ${
+              style={{ animationDelay: `${Math.min(idx, 8) * 60}ms` }}
+              className={`animate-fade-up rounded-2xl p-4 transition ring-1 hover:-translate-y-0.5 ${
                 completed
                   ? 'bg-emerald-500/5 ring-emerald-400/25'
                   : 'bg-black/25 ring-white/10 hover:ring-white/20'

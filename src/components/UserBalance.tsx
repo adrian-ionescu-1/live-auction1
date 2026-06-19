@@ -18,8 +18,8 @@ export default function UserBalance() {
   const zeroBalance = currentUser.balance === 0;
 
   return (
-    <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-4 max-w-md w-full">
-      <div className="flex items-start justify-between gap-4">
+    <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 p-4 ring-1 ring-white/10">
+      <div className="flex items-start justify-between gap-3 sm:gap-4">
         <div className="min-w-0">
           <p className="text-xs text-zinc-400">Logged in as</p>
           <p className="text-lg font-extrabold text-zinc-100 truncate">
@@ -65,8 +65,9 @@ export default function UserBalance() {
 
         <button
           onClick={logout}
-          className="rounded-xl bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-zinc-300 hover:text-zinc-100
-                     font-semibold py-2 px-4 transition active:scale-[0.98]"
+          className="shrink-0 rounded-xl bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-zinc-300 hover:text-zinc-100
+                     font-semibold py-2 px-3 sm:px-4 transition active:scale-[0.98]
+                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
         >
           Logout
         </button>

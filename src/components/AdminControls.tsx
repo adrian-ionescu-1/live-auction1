@@ -49,7 +49,7 @@ export default function AdminControls() {
 
   return (
     <>
-      <div className="rounded-3xl bg-white/5 ring-1 ring-white/10 p-6 w-full">
+      <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6 lg:max-w-none">
         <div className="flex items-center gap-3 mb-5">
           <div className="relative h-2.5 w-2.5">
             <span className="absolute inset-0 rounded-full bg-amber-300/80 blur-[2px]" />
@@ -70,7 +70,8 @@ export default function AdminControls() {
               onClick={startAuction}
               className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
                          text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/20
-                         ring-1 ring-emerald-400/25 active:scale-[0.98]"
+                         ring-1 ring-emerald-400/25 active:scale-[0.98]
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
             >
               ▶ Start Auction
             </button>
@@ -81,7 +82,8 @@ export default function AdminControls() {
               onClick={pauseAuction}
               className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
                          text-amber-200 bg-amber-500/15 hover:bg-amber-500/20
-                         ring-1 ring-amber-400/25 active:scale-[0.98]"
+                         ring-1 ring-amber-400/25 active:scale-[0.98]
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
             >
               ⏸ Pause Auction
             </button>
@@ -92,7 +94,8 @@ export default function AdminControls() {
               onClick={resumeAuction}
               className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
                          text-cyan-200 bg-cyan-500/15 hover:bg-cyan-500/20
-                         ring-1 ring-cyan-400/25 active:scale-[0.98]"
+                         ring-1 ring-cyan-400/25 active:scale-[0.98]
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
             >
               ▶ Resume Auction
             </button>
@@ -114,7 +117,7 @@ export default function AdminControls() {
                     key={sec}
                     onClick={() => handleExtend(sec)}
                     disabled={!canExtend}
-                    className={`flex-1 rounded-xl py-2 px-3 text-sm font-bold transition ring-1 active:scale-[0.98]
+                    className={`flex-1 rounded-xl py-2 px-3 text-sm font-bold transition ring-1 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60
                       ${
                         canExtend
                           ? 'text-cyan-200 bg-cyan-500/15 hover:bg-cyan-500/20 ring-cyan-400/25'
@@ -147,7 +150,8 @@ export default function AdminControls() {
             onClick={handleResetClick}
             className="w-full rounded-2xl py-3 px-6 text-sm font-bold transition
                        text-red-200 bg-red-500/15 hover:bg-red-500/20
-                       ring-1 ring-red-400/25 active:scale-[0.98]"
+                       ring-1 ring-red-400/25 active:scale-[0.98]
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
           >
             🔄 Reset Auction
           </button>

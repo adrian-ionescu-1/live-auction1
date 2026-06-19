@@ -22,10 +22,13 @@ export default function ConfirmDialog({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="w-full max-w-md rounded-3xl bg-black/40 ring-1 ring-white/10 shadow-2xl p-8">
-        
-        <h3 className="text-2xl font-extrabold text-zinc-100 mb-4">
+    <div
+      className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-md animate-scale-in rounded-3xl bg-black/40 p-6 ring-1 ring-white/10 shadow-2xl sm:p-8">
+        <h3 className="text-xl font-extrabold text-zinc-100 mb-4 sm:text-2xl">
           {title}
         </h3>
 
@@ -33,17 +36,17 @@ export default function ConfirmDialog({
           {message}
         </p>
 
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
           <button
             onClick={onCancel}
-            className="flex-1 rounded-xl bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-zinc-300 font-semibold py-3 px-6 transition"
+            className="flex-1 rounded-xl bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-zinc-300 font-semibold py-3 px-6 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/40"
           >
             Cancel
           </button>
 
           <button
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-gradient-to-r from-red-500/80 to-rose-500/80 hover:from-red-500 hover:to-rose-500 text-white font-semibold py-3 px-6 transition shadow-lg"
+            className="flex-1 rounded-xl bg-gradient-to-r from-red-500/80 to-rose-500/80 hover:from-red-500 hover:to-rose-500 text-white font-semibold py-3 px-6 transition shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
           >
             Confirm
           </button>
