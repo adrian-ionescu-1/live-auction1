@@ -1,5 +1,3 @@
-// src/components/AuctionBoard.tsx
-
 'use client';
 
 import { useEffect } from 'react';

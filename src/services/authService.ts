@@ -1,6 +1,3 @@
-// src/services/authService.ts
-// MODIFIED VERSION FOR PERMANENT REUSABLE KEYS
-
 import { supabase, SupabaseAuthKey } from '@/lib/supabase';
 import { User, UserRole } from '@/types/auction.types';
 

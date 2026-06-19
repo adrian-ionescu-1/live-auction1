@@ -1,254 +1,147 @@
-# 🏆 LIVE AUCTION APP – README
+# 🏆 Live Auction App
 
-🔗 Live Demo: https://live-auction1.vercel.app/
+Real-time player auction for WoT Blitz tournaments — FIFA-style draft. Admins run
+the auction, users bid live under a budget, spectators watch. Built on Next.js +
+Supabase with realtime sync and a server-authoritative timer.
 
-## 📌 Overview
-
-**Auction App** is a real-time live auction application designed to simulate a *player auction system* (inspired by fantasy leagues / sports auctions).
-
-The app supports **Admin**, **Spectator**, and **Users (Bidders)** with live updates, auction states, SOLD / UNSOLD messages, rounds, re-auctions, and full admin control.
-
-The backend is powered by **Supabase (PostgreSQL + Realtime + RLS)**, while the frontend consumes live data via REST APIs and realtime subscriptions.
+🔗 **Live demo:** https://live-auction1.vercel.app/
 
 ---
 
-## 🧱 Architecture
+## Tech stack
 
-### 🔹 Backend
+- **Next.js 14 (App Router)** + **React 18** + **TypeScript**
+- **Tailwind CSS** for styling
+- **Zustand** for client state (`src/store/auctionStore.ts`)
+- **Supabase** (PostgreSQL + Realtime) for data, bidding and settlement logic
 
-* Supabase (PostgreSQL)
-* Realtime subscriptions (`bids`, `auction_state`, `players`)
-* SQL triggers & functions
-* Row Level Security (RLS)
-
-### 🔹 Frontend
-
-* Admin Panel
-* User (Bidder) Panel
-* Spectator View
-* Live auction messages
+The heavy logic (bid validation, settlement, the timer) lives in **Postgres
+functions** so it is the single source of truth; the client subscribes to
+realtime changes and computes the displayed countdown locally.
 
 ---
 
-## 📂 Project File Structure
+## Project structure
 
 ```
-auction-app/
-├── src/
-│   ├── admin/
-│   │   ├── AdminDashboard.tsx
-│   │   ├── AuctionControls.tsx
-│   │   └── AdminUsersOverview.tsx
-│   │
-│   ├── user/
-│   │   ├── UserDashboard.tsx
-│   │   ├── BidPanel.tsx
-│   │   └── SquadOverview.tsx
-│   │
-│   ├── spectator/
-│   │   └── SpectatorView.tsx
-│   │
-│   ├── components/
-│   │   ├── PlayerCard.tsx
-│   │   ├── Timer.tsx
-│   │   └── AuctionMessage.tsx
-│   │
-│   ├── services/
-│   │   ├── supabaseClient.ts
-│   │   ├── auctionService.ts
-│   │   └── bidService.ts
-│   │
-│   ├── hooks/
-│   │   ├── useAuctionState.ts
-│   │   ├── useBids.ts
-│   │   └── usePlayers.ts
-│   │
-│   ├── utils/
-│   │   └── permissions.ts
-│   │
-│   └── App.tsx
+src/
+├─ app/                      # Next.js App Router
+│  ├─ _components/           # marketing UI (SiteHeader, CTASection, ui, Reveal, …)
+│  ├─ _data/                 # static content for the landing page
+│  ├─ login/                 # the auction room (auth gate + live app)
+│  ├─ tournaments|rules|     # public info pages
+│  │  faq|spectator/
+│  ├─ layout.tsx page.tsx    # root layout + landing page
+│  ├─ not-found.tsx globals.css
 │
-├── sql/
-│   ├── schema.sql
-│   ├── triggers.sql
-│   ├── rls.sql
-│   ├── reset_full.sql
-│   ├── reset_players.sql
-│   └── reset_users_partial.sql
+├─ components/
+│  ├─ auction/               # AuctionBoard, BidControls, BidHistory, PlayerCard,
+│  │                         # TargetProgress, ResultBanner, ResultsView,
+│  │                         # UserBalance, AdminControls, AdminUserCards
+│  ├─ auth/                  # LoginPage
+│  └─ ui/                    # ConfirmDialog
 │
-├── README.md
-└── package.json
+├─ store/auctionStore.ts     # Zustand store: realtime channels + actions
+├─ services/                 # auctionEngine (DB/RPC calls), authService
+├─ lib/supabase.ts           # Supabase client
+├─ config/auctionRules.ts    # TARGET_PLAYERS, MIN_PLAYER_COST, calcReserve
+└─ types/auction.types.ts
+
+supabase/migrations/         # SQL migrations (run them in the Supabase SQL editor)
+scripts/load-test.mjs        # concurrency / load test
 ```
 
 ---
 
-## 👥 User Roles
+## Getting started
 
-### 👑 Admin
+1. **Install**
 
-* Start / stop auctions
-* Control rounds and timers
-* See buyer and final bid price
-* Perform partial or full system resets
+   ```bash
+   npm install
+   ```
 
-### 👀 Spectator
+2. **Configure Supabase** — copy `.env.example` to `.env.local` and fill in:
 
-* Read-only view
-* Sees only **SOLD / UNSOLD** messages
-* No access to bidder data or prices
+   ```
+   NEXT_PUBLIC_SUPABASE_URL=...
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+   ```
 
-### 🙋 User (Bidder)
+   (Find these in the Supabase dashboard → Project Settings → API.)
 
-* Has a fixed budget
-* Places bids in real time
-* Receives SOLD / UNSOLD feedback
+3. **Apply the SQL migrations** in the Supabase SQL editor, in order:
 
----
+   - `supabase/migrations/20260619120000_fix_auction_concurrency.sql`
+   - `supabase/migrations/20260619130000_server_authoritative_timer.sql`
 
-## 🗄️ Database Structure
+4. **Run**
 
-### 📦 `users`
-
-| Column  | Type    | Description              |
-| ------- | ------- | ------------------------ |
-| id      | uuid    | user id                  |
-| name    | text    | display name             |
-| role    | text    | admin / spectator / user |
-| balance | integer | available budget         |
+   ```bash
+   npm run dev      # http://localhost:3000
+   npm run build    # production build
+   npm run lint
+   ```
 
 ---
 
-### 🔑 `auth_keys`
+## Roles
 
-| Column  | Type | Description           |
-| ------- | ---- | --------------------- |
-| id      | uuid | key id                |
-| user_id | uuid | linked user           |
-| key     | text | auth token / password |
+| Role          | Can                                                                 |
+| ------------- | ------------------------------------------------------------------- |
+| 👑 **Admin**     | Start / pause / resume / reset the auction, extend the timer, see every team's squad and budget |
+| 🙋 **User**      | Bid in real time under a fixed budget, track their squad and remaining balance |
+| 👀 **Spectator** | Read-only live view (no bidding)                                    |
 
----
-
-### 🧍 `players`
-
-| Column     | Type    | Description        |
-| ---------- | ------- | ------------------ |
-| id         | uuid    | player id          |
-| name       | text    | player name        |
-| wn8_30d    | integer | performance metric |
-| winrate    | decimal | winrate %          |
-| avg_damage | integer | average damage     |
-| base_price | integer | starting price     |
+Login is **key-based**: each access key maps to a user (`auth_keys` table).
 
 ---
 
-### 💰 `bids`
+## Auction flow
 
-| Column     | Type      | Description |
-| ---------- | --------- | ----------- |
-| id         | uuid      | bid id      |
-| player_id  | uuid      | player      |
-| user_id    | uuid      | bidder      |
-| amount     | integer   | bid amount  |
-| created_at | timestamp | timestamp   |
+`idle → countdown → active → result → (next player) → … → finished`
 
----
-
-### ⏱️ `auction_state`
-
-| Column            | Type    | Description               |
-| ----------------- | ------- | ------------------------- |
-| status            | text    | idle / running / finished |
-| current_player_id | uuid    | active player             |
-| time_remaining    | integer | seconds                   |
-| current_round     | integer | round number              |
-| sold_players      | uuid[]  | sold players              |
-| unsold_players    | uuid[]  | unsold players            |
+1. Admin starts the auction (`start_auction`).
+2. Each player is auctioned for a fixed time; bids within the last seconds
+   extend the deadline (anti-snipe).
+3. When the deadline passes, the server settles the player:
+   - **SOLD** to the highest bidder (balance is deducted), or
+   - **UNSOLD** (no bids) → re-entered for a re-auction round.
+4. Phase transitions are driven by `auction_tick()` — idempotent and globally
+   locked, so any client advances it once the deadline passes. The timer no
+   longer depends on the admin's browser tab.
 
 ---
 
-## 🔁 Auction Flow
+## Key database objects
 
-1. Admin starts the auction
-2. `current_player_id` is set
-3. Users place bids
-4. Timer expires
-5. If bids exist → **SOLD**
-6. If no bids → **UNSOLD** → re-auction
-7. Spectators see only SOLD / UNSOLD status
-
----
-
-## 🧠 Core Logic Rules
-
-* **Admin view**:
-
-  * buyer identity
-  * final price
-
-* **User & Spectator view**:
-
-  * auction result text only
-
-All updates are synchronized through realtime subscriptions.
+- **Tables:** `users`, `auth_keys`, `players`, `bids`, `auction_state`
+  (`auction_state.phase_ends_at` is the deadline source of truth;
+  `players.sold_to_user_id` / `sold_amount` record winners).
+- **Functions (RPC):** `place_bid` / `place_bid_core` (validated, per-player
+  locked), `settle_player` (idempotent), `auction_tick`,
+  `advance_to_next_player`, `start_auction`, `pause_auction`, `resume_auction`,
+  `extend_auction_time`.
 
 ---
 
-## 🔐 Security
+## Load testing
 
-* RLS enabled on all tables
-* Admin has full access
-* Users have restricted read/write access
-* Authentication handled via `auth_keys`
+`scripts/load-test.mjs` simulates many users bidding in simultaneous bursts,
+drives the auction, and verifies correctness (winner = highest bid, balances
+deducted correctly, target cap respected, money conserved).
 
----
-
-## ♻️ Common SQL Resets
-
-### 🔄 Reset players & bids
-
-```sql
-DELETE FROM bids;
-DELETE FROM players;
+```bash
+npm run load-test -- --reset --players 8     # reset, then run 8 players
+npm run load-test -- --users 8 --burst 6     # tune concurrency
+npm run load-test -- --reset-only            # just clean up
 ```
 
-### 🔄 Reset User Squad Overview only
-
-```sql
-DELETE FROM bids;
-```
-
-### 🔄 Full system reset
-
-Use: **LIVE AUCTION SYSTEM - COMPLETE DATABASE RESET** script
+> ⚠️ It mutates data — run it against a test project or clean up with `--reset`.
 
 ---
 
-## 🧪 Debug & Common Errors
+## Status
 
-### ❌ `player_id=in()` error
-
-* Occurs when player list is empty
-* Ensure players are inserted before querying bids
-
-### ❌ Trigger dependency errors
-
-* Use `DROP TRIGGER ... CASCADE`
-
----
-
-## 📦 Best Practices
-
-* Do not edit production data manually
-* Version SQL scripts
-* Always backup before resets
-
----
-
-## 🚀 Project Status
-
-✅ Fully functional
-✅ Realtime enabled
-✅ Admin-controlled
-🛠️ Ongoing improvements (UX & messaging)
-
----
+✅ Realtime auction · ✅ Server-authoritative timer · ✅ Concurrency-safe bidding
+· 🛠️ Ongoing UX polish

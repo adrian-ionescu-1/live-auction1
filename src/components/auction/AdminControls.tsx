@@ -1,10 +1,8 @@
-// src/components/AdminControls.tsx
-
 'use client';
 
 import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
-import ConfirmDialog from './ConfirmDialog';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 const TIME_EXTENSIONS = [5, 10, 15]; // seconds
 

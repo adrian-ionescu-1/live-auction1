@@ -1,4 +1,3 @@
-// src/app/_components/SiteHeader.tsx
 //
 // Shared sticky navbar used by every static page. Includes a mobile menu
 // (the previous navbar was `hidden md:flex`, so phones had no navigation).

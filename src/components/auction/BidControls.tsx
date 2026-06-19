@@ -1,5 +1,3 @@
-// src/components/BidControls.tsx
-
 'use client';
 
 import { useState } from 'react';

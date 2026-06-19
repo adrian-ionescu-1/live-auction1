@@ -1,4 +1,3 @@
-// src/app/_components/CTASection.tsx
 //
 // The bottom call-to-action block that repeated (near-identically) at the
 // end of every static page.

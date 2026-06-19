@@ -1,5 +1,3 @@
-// src/components/ResultsView.tsx
-
 'use client';
 
 import { useAuctionStore } from '@/store/auctionStore';

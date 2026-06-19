@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuctionStore } from '@/store/auctionStore';
-import TargetProgress from '@/components/TargetProgress';
+import TargetProgress from './TargetProgress';
 import { TARGET_PLAYERS, calcReserve } from '@/config/auctionRules';
 
 export default function UserBalance() {

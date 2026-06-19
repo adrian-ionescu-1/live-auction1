@@ -1,5 +1,3 @@
-// src/components/BidHistory.tsx
-
 'use client';
 
 import { useAuctionStore } from '@/store/auctionStore';
