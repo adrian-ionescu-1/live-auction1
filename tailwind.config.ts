@@ -55,6 +55,14 @@ const config: Config = {
           "60%": { transform: "scale(1.05)", opacity: "1" },
           "100%": { transform: "scale(1)" },
         },
+        aurora: {
+          "0%, 100%": { transform: "translate(-50%, 0) rotate(0deg) scale(1)", opacity: "0.7" },
+          "50%": { transform: "translate(-50%, -24px) rotate(8deg) scale(1.08)", opacity: "1" },
+        },
+        sheen: {
+          "0%": { transform: "translateX(-150%) skewX(-12deg)" },
+          "60%, 100%": { transform: "translateX(250%) skewX(-12deg)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.7s cubic-bezier(0.22,1,0.36,1) both",
@@ -67,6 +75,8 @@ const config: Config = {
         ticker: "ticker 28s linear infinite",
         "scale-in": "scale-in 0.25s cubic-bezier(0.22,1,0.36,1) both",
         pop: "pop 0.45s cubic-bezier(0.22,1,0.36,1) both",
+        aurora: "aurora 18s ease-in-out infinite",
+        sheen: "sheen 4.5s ease-in-out infinite",
       },
     },
   },

@@ -32,23 +32,32 @@ export default function BidHistory() {
                     : 'bg-black/30 ring-white/10'
                 }`}
             >
-              <div>
-                <p
-                  className={`font-semibold ${
-                    isLatest ? 'text-emerald-200' : 'text-zinc-200'
-                  }`}
-                >
-                  {bid.username}
-                </p>
+              <div className="flex items-center gap-2.5">
+                {isLatest && (
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                  </span>
+                )}
+                <div>
+                  <p
+                    className={`font-semibold ${
+                      isLatest ? 'text-emerald-200' : 'text-zinc-200'
+                    }`}
+                  >
+                    {bid.username}
+                  </p>
 
-                <p className="text-xs text-zinc-400 tabular-nums">
-                  {new Date(bid.timestamp).toLocaleTimeString()}
-                </p>
+                  <p className="text-xs text-zinc-400 tabular-nums">
+                    {new Date(bid.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
               </div>
 
               <p
+                key={bid.amount}
                 className={`text-xl font-extrabold tabular-nums ${
-                  isLatest ? 'text-emerald-300' : 'text-zinc-300'
+                  isLatest ? 'text-emerald-300 animate-pop' : 'text-zinc-300'
                 }`}
               >
                 ${bid.amount.toLocaleString()}

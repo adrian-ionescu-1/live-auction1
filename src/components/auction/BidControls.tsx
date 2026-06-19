@@ -103,9 +103,13 @@ export default function BidControls() {
       {/* Current highest bid display */}
       <div className="mb-4">
         {currentHighestBid ? (
-          <div className="rounded-2xl bg-cyan-500/10 ring-1 ring-cyan-400/20 p-4">
+          <div className="relative overflow-hidden rounded-2xl bg-cyan-500/10 ring-1 ring-cyan-400/20 p-4">
+            <span className="pointer-events-none absolute -top-8 -right-8 h-24 w-24 rounded-full bg-cyan-400/15 blur-2xl" />
             <p className="text-xs text-zinc-400">Current Highest Bid</p>
-            <p className="text-3xl font-extrabold text-cyan-200 tabular-nums">
+            <p
+              key={currentHighestBid.amount}
+              className="text-3xl font-extrabold text-cyan-200 tabular-nums animate-pop"
+            >
               ${currentHighestBid.amount.toLocaleString()}
             </p>
             <p className="text-sm text-zinc-300">
@@ -165,15 +169,18 @@ export default function BidControls() {
                   key={increment}
                   onClick={() => handlePresetBid(increment)}
                   disabled={!canBid || !canAfford}
-                  className={`rounded-2xl py-4 px-3 font-extrabold transition ring-1 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60
+                  className={`group/btn relative overflow-hidden rounded-2xl py-4 px-3 font-extrabold transition ring-1 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60
                     ${
                       canAfford
-                        ? 'bg-emerald-500/15 hover:bg-emerald-500/20 hover:scale-[1.03] text-emerald-200 ring-emerald-400/25'
+                        ? 'bg-emerald-500/15 hover:bg-emerald-500/25 hover:scale-[1.03] hover:shadow-[0_0_30px_rgba(16,185,129,0.18)] text-emerald-200 ring-emerald-400/25'
                         : 'bg-white/5 text-zinc-500 ring-white/10 cursor-not-allowed opacity-70'
                     }`}
                 >
-                  <div className="text-lg tabular-nums">+${increment}</div>
-                  <div className="text-xs text-zinc-400 mt-1 tabular-nums">(${totalBid})</div>
+                  {canAfford && (
+                    <span className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/25 to-transparent opacity-0 group-hover/btn:opacity-100 group-hover/btn:animate-sheen" />
+                  )}
+                  <div className="relative text-lg tabular-nums">+${increment}</div>
+                  <div className="relative text-xs text-zinc-400 mt-1 tabular-nums">(${totalBid})</div>
                 </button>
               );
             })}
