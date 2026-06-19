@@ -22,7 +22,6 @@ import { create } from 'zustand';
 import {
   AuctionState,
   Player,
-  User,
   Bid,
   UserRole,
   AuctionStatus,
@@ -34,17 +33,41 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 const COUNTDOWN_DURATION = 3;
 const AUCTION_DURATION = 30;
 
-// Module-level channel refs and timer (one per browser tab)
+// Module-level channel refs (one per browser tab)
 let auctionStateChannel: RealtimeChannel | null = null;
 let bidsChannel: RealtimeChannel | null = null;
 let usersChannel: RealtimeChannel | null = null;
 let playersChannel: RealtimeChannel | null = null;
-let timerInterval: ReturnType<typeof setInterval> | null = null;
 
-// Prevents the admin tick from re-entering during an async transition
-let isProcessingTransition = false;
+// Universal deadline clock — runs on EVERY client (not just the admin). It only
+// computes the displayed countdown from phase_ends_at and, when the deadline
+// passes, asks the server to advance the phase (auction_tick RPC).
+let clockInterval: ReturnType<typeof setInterval> | null = null;
+
+// Throttle for the server-side phase advance so many clients don't spam it.
+let lastTickCallAt = 0;
+let tickInFlight = false;
+
+// Ask the server to advance the auction phase. Idempotent + globally locked
+// server-side, so it is safe for any/all clients to call near a deadline.
+async function driveAuctionTick() {
+  const now = Date.now();
+  if (tickInFlight || now - lastTickCallAt < 1000) return;
+  lastTickCallAt = now;
+  tickInFlight = true;
+  try {
+    await supabase.rpc('auction_tick');
+  } catch (e) {
+    console.error('auction_tick error:', e);
+  } finally {
+    tickInFlight = false;
+  }
+}
 
 interface AuctionStoreState extends AuctionState {
+  // Server deadline for the current phase (ms epoch), used to render the timer
+  // locally so it never depends on a single browser tab ticking.
+  phaseEndsAt: number | null;
   login: (userId: string, role: UserRole) => Promise<void>;
   logout: () => void;
   startAuction: () => Promise<void>;
@@ -52,7 +75,6 @@ interface AuctionStoreState extends AuctionState {
   resumeAuction: () => Promise<void>;
   placeBid: (amount: number) => Promise<{ success: boolean; error: string | null }>;
   extendTime: (seconds: number) => Promise<{ success: boolean; error: string | null }>;
-  tick: () => Promise<void>;
   reset: () => Promise<void>;
   dismissResults: () => void;
   reconcile: () => Promise<void>;
@@ -73,6 +95,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   status: 'idle',
   countdown: COUNTDOWN_DURATION,
   timeRemaining: AUCTION_DURATION,
+  phaseEndsAt: null,
   currentHighestBid: null,
   bidHistory: [],
   resultMessage: null,
@@ -109,6 +132,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         status: (auctionState.status as AuctionStatus) ?? 'idle',
         countdown: auctionState.countdown ?? COUNTDOWN_DURATION,
         timeRemaining: auctionState.time_remaining ?? AUCTION_DURATION,
+        phaseEndsAt: auctionState.phase_ends_at
+          ? new Date(auctionState.phase_ends_at).getTime()
+          : null,
 
         // bid history is driven by bidsChannel (no re-fetch here)
         currentHighestBid: null,
@@ -143,6 +169,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       status: 'idle',
       countdown: COUNTDOWN_DURATION,
       timeRemaining: AUCTION_DURATION,
+      phaseEndsAt: null,
       currentHighestBid: null,
       bidHistory: [],
       resultMessage: null,
@@ -204,12 +231,18 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
           const playerChanged = nextPlayerId !== prevPlayerId;
           const shouldClearBids = playerChanged || nextStatus === 'countdown';
 
+          const nextPhaseEndsAt =
+            typeof newState.phase_ends_at === 'string'
+              ? new Date(newState.phase_ends_at).getTime()
+              : null;
+
           set((s) => ({
             status: nextStatus,
             currentPlayerIndex: (newState.current_player_index as number) ?? s.currentPlayerIndex,
             currentPlayer,
             timeRemaining: (newState.time_remaining as number) ?? s.timeRemaining,
             countdown: (newState.countdown as number) ?? s.countdown,
+            phaseEndsAt: nextPhaseEndsAt,
             currentRound: (newState.current_round as number) ?? s.currentRound,
             roundTotalPlayers: (newState.round_total_players as number) ?? s.roundTotalPlayers,
             roundCurrentIndex: (newState.round_current_index as number) ?? s.roundCurrentIndex,
@@ -220,22 +253,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             bidHistory: shouldClearBids ? [] : s.bidHistory,
             currentHighestBid: shouldClearBids ? null : s.currentHighestBid,
           }));
-
-          // Admin timer loop control (use role, not users list)
-          const isAdmin = get().currentUserRole === 'ADMIN';
-
-          if (isAdmin && (nextStatus === 'countdown' || nextStatus === 'active' || nextStatus === 'result')) {
-            if (!timerInterval) {
-              timerInterval = setInterval(() => {
-                get().tick();
-              }, 1000);
-            }
-          } else {
-            if (timerInterval) {
-              clearInterval(timerInterval);
-              timerInterval = null;
-            }
-          }
         }
       )
       .subscribe();
@@ -322,6 +339,32 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         }
       )
       .subscribe();
+
+    // ── Universal deadline clock (all clients) ──────────────────
+    // Renders the countdown locally from phase_ends_at and drives the
+    // server-side phase advance when the deadline passes.
+    if (clockInterval) clearInterval(clockInterval);
+    clockInterval = setInterval(() => {
+      const s = get();
+      const ends = s.phaseEndsAt;
+      if (!ends) return;
+
+      const remainingMs = ends - Date.now();
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      if (s.status === 'active') {
+        if (s.timeRemaining !== remainingSec) set({ timeRemaining: remainingSec });
+      } else if (s.status === 'countdown' || s.status === 'result') {
+        if (s.countdown !== remainingSec) set({ countdown: remainingSec });
+      }
+
+      if (
+        remainingMs <= 0 &&
+        (s.status === 'countdown' || s.status === 'active' || s.status === 'result')
+      ) {
+        void driveAuctionTick();
+      }
+    }, 250);
   },
 
   // ── cleanupRealtime ────────────────────────────────────────
@@ -342,9 +385,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       supabase.removeChannel(playersChannel);
       playersChannel = null;
     }
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      timerInterval = null;
+    if (clockInterval) {
+      clearInterval(clockInterval);
+      clockInterval = null;
     }
   },
 
@@ -362,18 +405,10 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
 
     const firstPlayer = players[0];
 
-    await AuctionEngine.updateAuctionState({
-      status: 'countdown',
-      current_player_id: firstPlayer.id,
-      current_player_index: 0,
-      countdown: COUNTDOWN_DURATION,
-      time_remaining: AUCTION_DURATION,
-      current_highest_bid_id: null,
-      current_round: 1,
-      round_total_players: players.length,
-      round_current_index: 1,
-      sold_players: [],
-      unsold_players: [],
+    // Server sets phase_ends_at authoritatively (no client-clock skew).
+    await supabase.rpc('start_auction', {
+      p_first_player_id: firstPlayer.id,
+      p_total_players: players.length,
     });
   },
 
@@ -383,7 +418,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     if (state.currentUserRole !== 'ADMIN') return;
     if (state.status !== 'active') return;
 
-    await AuctionEngine.updateAuctionState({ status: 'paused' });
+    await supabase.rpc('pause_auction');
   },
 
   // ── resumeAuction (admin only) ─────────────────────────────
@@ -392,7 +427,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     if (state.currentUserRole !== 'ADMIN') return;
     if (state.status !== 'paused') return;
 
-    await AuctionEngine.updateAuctionState({ status: 'active' });
+    await supabase.rpc('resume_auction');
   },
 
   // ── placeBid (user/admin) ──────────────────────────────────
@@ -412,47 +447,6 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       return { success: false, error: 'Only admins can extend time' };
     }
     return await AuctionEngine.extendAuctionTimeRpc(seconds);
-  },
-
-  // ── tick (ADMIN ONLY) ──────────────────────────────────────
-  tick: async () => {
-    const state = get();
-    if (state.currentUserRole !== 'ADMIN') return;
-    if (isProcessingTransition) return;
-
-    if (state.status === 'countdown') {
-      if (state.countdown > 1) {
-        await AuctionEngine.updateAuctionState({ countdown: state.countdown - 1 });
-      } else {
-        await AuctionEngine.updateAuctionState({
-          status: 'active',
-          countdown: 0,
-          time_remaining: AUCTION_DURATION,
-        });
-      }
-      return;
-    }
-
-    if (state.status === 'active') {
-      if (state.timeRemaining > 1) {
-        await AuctionEngine.updateAuctionState({ time_remaining: state.timeRemaining - 1 });
-      } else {
-        isProcessingTransition = true;
-        await settleCurrentPlayer(get, set);
-        isProcessingTransition = false;
-      }
-      return;
-    }
-
-    if (state.status === 'result') {
-      if (state.countdown > 1) {
-        await AuctionEngine.updateAuctionState({ countdown: state.countdown - 1 });
-      } else {
-        isProcessingTransition = true;
-        await loadNextPlayer(get, set);
-        isProcessingTransition = false;
-      }
-    }
   },
 
   // ── reset (admin only) ─────────────────────────────────────
@@ -477,6 +471,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       status: 'idle',
       countdown: COUNTDOWN_DURATION,
       timeRemaining: AUCTION_DURATION,
+      phaseEndsAt: null,
       currentHighestBid: null,
       bidHistory: [],
       resultMessage: null,
@@ -535,6 +530,9 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         soldPlayers: auctionState.sold_players ?? [],
         unsoldrPlayers: auctionState.unsold_players ?? [],
         status: (auctionState.status as AuctionStatus) ?? get().status,
+        phaseEndsAt: auctionState.phase_ends_at
+          ? new Date(auctionState.phase_ends_at).getTime()
+          : null,
         currentRound: auctionState.current_round ?? get().currentRound,
         roundTotalPlayers: auctionState.round_total_players ?? get().roundTotalPlayers,
         roundCurrentIndex: auctionState.round_current_index ?? get().roundCurrentIndex,
@@ -545,131 +543,3 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     }
   },
 }));
-
-// ──────────────────────────────────────────────────────────────
-// HELPER: settleCurrentPlayer
-// ──────────────────────────────────────────────────────────────
-async function settleCurrentPlayer(
-  get: () => AuctionStoreState,
-  set: (state: any) => void
-) {
-  const state = get();
-  const player = state.currentPlayer;
-  if (!player) return;
-
-  const result = await AuctionEngine.settlePlayerRpc(player.id);
-
-  if (result.error) {
-    console.error('settle_player RPC error:', result.error);
-    return;
-  }
-
-  let resultMessage: string;
-  if (result.winner_user_id) {
-    const winner = state.users.find((u: User) => u.id === result.winner_user_id);
-    const winnerName = winner?.username ?? 'Unknown';
-    resultMessage = `${player.name} - SOLD to ${winnerName} for $${Number(
-      result.winning_amount
-    ).toLocaleString()}!`;
-  } else {
-    resultMessage = `${player.name} - UNSOLD - will re-auction`;
-  }
-
-  set({ resultMessage });
-}
-
-// ──────────────────────────────────────────────────────────────
-// HELPER: loadNextPlayer
-// ──────────────────────────────────────────────────────────────
-async function loadNextPlayer(
-  get: () => AuctionStoreState,
-  set: (state: any) => void
-) {
-  const state = get();
-
-  const soldPlayerIds = new Set(state.soldPlayers);
-  const unsoldPlayerIds = new Set(state.unsoldrPlayers);
-
-  const remainingPlayers = state.allPlayers.filter((p: Player) => !soldPlayerIds.has(p.id));
-
-  if (remainingPlayers.length === 0) {
-    await AuctionEngine.updateAuctionState({ status: 'finished' });
-    set({ resultMessage: 'Auction completed! All players auctioned.', status: 'finished' });
-    return;
-  }
-
-  let nextPlayer: Player | null = null;
-  let nextIndex = -1;
-  let isStartingReauction = false;
-
-  for (let i = state.currentPlayerIndex + 1; i < state.allPlayers.length; i++) {
-    const player = state.allPlayers[i];
-    if (!soldPlayerIds.has(player.id)) {
-      nextPlayer = player;
-      nextIndex = i;
-      break;
-    }
-  }
-
-  if (!nextPlayer && unsoldPlayerIds.size > 0) {
-    isStartingReauction = true;
-
-    for (const unsoldId of Array.from(unsoldPlayerIds)) {
-      const player = state.allPlayers.find((p: Player) => p.id === unsoldId);
-      if (player && !soldPlayerIds.has(player.id)) {
-        nextPlayer = player;
-        nextIndex = state.allPlayers.findIndex((p: Player) => p.id === unsoldId);
-
-        const updatedUnsoldPlayers = state.unsoldrPlayers.filter((id: string) => id !== unsoldId);
-
-        // update local + DB so all clients stay in sync
-        set({ unsoldrPlayers: updatedUnsoldPlayers });
-        await AuctionEngine.updateAuctionState({ unsold_players: updatedUnsoldPlayers });
-
-        break;
-      }
-    }
-  }
-
-  if (!nextPlayer) {
-    await AuctionEngine.updateAuctionState({ status: 'finished' });
-    set({ resultMessage: 'Auction completed! All players auctioned.', status: 'finished' });
-    return;
-  }
-
-  let newRoundCurrentIndex = state.roundCurrentIndex + 1;
-  let newRound = state.currentRound;
-  let newRoundTotalPlayers = state.roundTotalPlayers;
-
-  if (isStartingReauction) {
-    newRound = state.currentRound + 1;
-    newRoundTotalPlayers = unsoldPlayerIds.size;
-    newRoundCurrentIndex = 1;
-  }
-
-  if (newRoundCurrentIndex > state.roundTotalPlayers && !isStartingReauction) {
-    newRound = state.currentRound + 1;
-    newRoundTotalPlayers = unsoldPlayerIds.size;
-    newRoundCurrentIndex = 1;
-  }
-
-  set({
-    bidHistory: [],
-    currentHighestBid: null,
-    currentRound: newRound,
-    roundTotalPlayers: newRoundTotalPlayers,
-    roundCurrentIndex: newRoundCurrentIndex,
-  });
-
-  await AuctionEngine.updateAuctionState({
-    status: 'countdown',
-    current_player_id: nextPlayer.id,
-    current_player_index: nextIndex,
-    countdown: COUNTDOWN_DURATION,
-    time_remaining: AUCTION_DURATION,
-    current_highest_bid_id: null,
-    current_round: newRound,
-    round_total_players: newRoundTotalPlayers,
-    round_current_index: newRoundCurrentIndex,
-  });
-}
