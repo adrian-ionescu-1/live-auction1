@@ -203,6 +203,7 @@ export class AuctionEngine {
         current_player_index: -1,
         countdown: 3,
         time_remaining: 30,
+        phase_ends_at: null,
         current_highest_bid_id: null,
         current_round: 1,
         round_total_players: 0,
