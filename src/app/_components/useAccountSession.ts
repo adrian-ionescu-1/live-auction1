@@ -152,6 +152,7 @@ export function useAccountSession() {
       sessionStorage.removeItem("auction_user_id");
       sessionStorage.removeItem("auction_user_role");
       sessionStorage.removeItem("auction_user_name");
+      sessionStorage.removeItem("admin_access_key");
       Object.values(ACCOUNT_CACHE).forEach((k) => sessionStorage.removeItem(k));
       if (session?.kind === "discord") {
         await AccountService.signOut();

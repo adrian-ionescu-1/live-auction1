@@ -1,6 +1,11 @@
 import { supabase, SupabaseAuthKey } from '@/lib/supabase';
 import { User, UserRole } from '@/types/auction.types';
 
+// sessionStorage key holding the access-key admin's key after login. The admin
+// is anonymous to Postgres (no JWT), so the guarded admin RPCs need the key as
+// proof; we keep it here and forward it on each admin write. Cleared on logout.
+export const ADMIN_KEY_STORAGE = 'admin_access_key';
+
 export class AuthService {
   /**
    * Authenticate user with key (MODIFIED FOR REUSABLE KEYS)
@@ -29,6 +34,12 @@ export class AuthService {
       // stray one survived the cleanup migration.
       if (typedAuthKey.role !== 'ADMIN') {
         return { success: false, error: 'Access keys are for admins only. Bidders sign in with Discord.' };
+      }
+
+      // Keep the key so the guarded admin RPCs can prove this anonymous caller
+      // really is the access-key admin (see ADMIN_KEY_STORAGE).
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(ADMIN_KEY_STORAGE, key.trim());
       }
 
       // MODIFICATION: Check if user already exists with this key

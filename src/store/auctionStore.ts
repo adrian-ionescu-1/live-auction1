@@ -202,6 +202,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     get().cleanupRealtime();
     sessionStorage.removeItem('auction_user_id');
     sessionStorage.removeItem('auction_user_role');
+    sessionStorage.removeItem('admin_access_key');
 
     set({
       currentUserId: null,
