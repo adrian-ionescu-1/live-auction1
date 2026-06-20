@@ -15,6 +15,7 @@ import { useMembersPresence } from "@/app/_components/useMembersPresence";
 import EventMembersCard from "@/components/admin/EventMembersCard";
 import EventResultsCard from "@/components/admin/EventResultsCard";
 import ConfirmByNameDialog from "@/components/admin/ConfirmByNameDialog";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 function fmtDateTime(value: string | null): string {
   if (!value) return "—";
@@ -68,11 +69,16 @@ function AddMemberControl({
         value={selected}
         onChange={(e) => setSelected(e.target.value)}
         disabled={busy}
-        className="flex-1 rounded-xl bg-black/30 px-3 py-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:opacity-60"
+        className="flex-1 rounded-xl bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:opacity-60"
       >
-        <option value="">Select a member to add…</option>
+        {/* Native option lists fall back to the OS theme, which renders nearly
+            invisible on a transparent dark control — pin a solid background and
+            light text so the opened list is readable. */}
+        <option value="" className="bg-zinc-900 text-zinc-100">
+          Select a member to add…
+        </option>
         {candidates.map((m) => (
-          <option key={m.id} value={m.id}>
+          <option key={m.id} value={m.id} className="bg-zinc-900 text-zinc-100">
             {m.username}
             {m.role.toLowerCase() !== "bidder" ? ` (${m.role})` : ""}
           </option>
@@ -106,8 +112,10 @@ export default function EventsListPage() {
   const [resultsLoading, setResultsLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<AuctionEvent | null>(null);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [reopening, setReopening] = useState<AuctionEvent | null>(null);
+  const [reopenConfirming, setReopenConfirming] = useState(false);
   const [reopenBusy, setReopenBusy] = useState(false);
 
   const loadBase = useCallback(async () => {
@@ -171,6 +179,16 @@ export default function EventsListPage() {
     }
   };
 
+  const closeDelete = () => {
+    setDeleting(null);
+    setDeleteConfirming(false);
+  };
+
+  const closeReopen = () => {
+    setReopening(null);
+    setReopenConfirming(false);
+  };
+
   const handleDelete = async () => {
     if (!deleting) return;
     setDeleteBusy(true);
@@ -182,7 +200,7 @@ export default function EventsListPage() {
         setMembers([]);
         setResults([]);
       }
-      setDeleting(null);
+      closeDelete();
       await loadBase();
     }
   };
@@ -193,7 +211,7 @@ export default function EventsListPage() {
     const res = await EventsService.setLiveEvent(reopening.id);
     setReopenBusy(false);
     if (res.success) {
-      setReopening(null);
+      closeReopen();
       router.push("/login");
     }
   };
@@ -301,6 +319,16 @@ export default function EventsListPage() {
 
                     <div className="space-y-1.5 rounded-2xl bg-black/25 p-4 ring-1 ring-white/10">
                       <TimeRow label="Created" value={fmtDateTime(ev.createdAt)} />
+                      {ev.opensAt && (
+                        <TimeRow
+                          label={
+                            new Date(ev.opensAt).getTime() > Date.now()
+                              ? "Opens (scheduled)"
+                              : "Opened"
+                          }
+                          value={fmtDateTime(ev.opensAt)}
+                        />
+                      )}
                       <TimeRow label="Available to enter" value={fmtDateTime(ev.availableAt)} />
                       <TimeRow
                         label="Finished"
@@ -385,11 +413,12 @@ export default function EventsListPage() {
         )}
       </div>
 
+      {/* Delete — step 1: type the event name to confirm. */}
       <ConfirmByNameDialog
         eventName={deleting?.name ?? ""}
         title="Delete event"
         tone="danger"
-        confirmLabel="Delete event"
+        confirmLabel="Continue"
         description={
           <>
             This permanently deletes{" "}
@@ -402,17 +431,30 @@ export default function EventsListPage() {
             )}
           </>
         }
-        isOpen={deleting !== null}
-        busy={deleteBusy}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleting(null)}
+        isOpen={deleting !== null && !deleteConfirming}
+        busy={false}
+        onConfirm={() => setDeleteConfirming(true)}
+        onCancel={closeDelete}
       />
 
+      {/* Delete — step 2: final "are you sure" before the irreversible action. */}
+      <ConfirmDialog
+        isOpen={deleteConfirming}
+        title="Delete this event for good?"
+        message={`There's no undo. "${deleting?.name ?? ""}" and all of its results will be permanently removed.`}
+        tone="danger"
+        confirmLabel="Yes, delete it"
+        busy={deleteBusy}
+        onConfirm={handleDelete}
+        onCancel={closeDelete}
+      />
+
+      {/* Reopen — step 1: type the event name to confirm. */}
       <ConfirmByNameDialog
         eventName={reopening?.name ?? ""}
         title="Reopen event"
         tone="primary"
-        confirmLabel="Reopen & open room"
+        confirmLabel="Continue"
         description={
           <>
             Reopening{" "}
@@ -421,10 +463,22 @@ export default function EventsListPage() {
             can enter again.
           </>
         }
-        isOpen={reopening !== null}
+        isOpen={reopening !== null && !reopenConfirming}
+        busy={false}
+        onConfirm={() => setReopenConfirming(true)}
+        onCancel={closeReopen}
+      />
+
+      {/* Reopen — step 2: final "are you sure" before wiping results. */}
+      <ConfirmDialog
+        isOpen={reopenConfirming}
+        title="Reopen this event?"
+        message={`This wipes the current results of "${reopening?.name ?? ""}", restores every member's budget, and makes the event live again.`}
+        tone="primary"
+        confirmLabel="Yes, reopen it"
         busy={reopenBusy}
         onConfirm={handleReopen}
-        onCancel={() => setReopening(null)}
+        onCancel={closeReopen}
       />
     </>
   );

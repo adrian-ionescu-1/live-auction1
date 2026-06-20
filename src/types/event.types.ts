@@ -32,6 +32,12 @@ export interface AuctionEvent {
   createdAt: string;
   /** When the event became enterable (went live / was reopened). */
   availableAt: string | null;
+  /**
+   * When bidders may start entering the room. null = open immediately; a future
+   * timestamp keeps the event created but closed until then (bidders see a
+   * countdown). Set by the admin at creation.
+   */
+  opensAt: string | null;
   /** When the auction closed, or null while still open. */
   finishedAt: string | null;
 }
