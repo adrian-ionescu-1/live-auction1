@@ -68,43 +68,45 @@ export function useAccountSession() {
     };
 
     try {
-      const keyAuth = readKey();
-      if (keyAuth) {
-        // Key login wins and never needs a network round-trip.
-        setSession(keyAuth);
+      // A real Discord account is the identity; the auction key session
+      // (auction_user_*) is just a transient sub-activity a Discord bidder picks
+      // up when they enter the room, so it must NOT shadow the Discord account.
+      // Only the access-key admin has a key session and no Discord profile.
+      const discordCache = readDiscordCache();
+      if (discordCache) {
+        setSession(discordCache);
       } else {
-        // Show the cached Discord identity immediately, then revalidate.
-        setSession(readDiscordCache());
-
-        AccountService.getMyProfile().then((profile) => {
-          if (cancelled) return;
-          // A key session may have appeared meanwhile — don't clobber it.
-          if (sessionStorage.getItem("auction_user_id")) return;
-
-          if (profile) {
-            sessionStorage.setItem(ACCOUNT_CACHE.id, profile.id);
-            sessionStorage.setItem(ACCOUNT_CACHE.role, profile.role);
-            sessionStorage.setItem(ACCOUNT_CACHE.name, profile.username);
-            if (profile.avatarUrl) {
-              sessionStorage.setItem(ACCOUNT_CACHE.avatar, profile.avatarUrl);
-            } else {
-              sessionStorage.removeItem(ACCOUNT_CACHE.avatar);
-            }
-            setSession({
-              kind: "discord",
-              id: profile.id,
-              role: profile.role,
-              name: profile.username,
-              avatarUrl: profile.avatarUrl,
-            });
-          } else {
-            Object.values(ACCOUNT_CACHE).forEach((k) =>
-              sessionStorage.removeItem(k),
-            );
-            setSession(null);
-          }
-        });
+        setSession(readKey());
       }
+
+      // Revalidate against Supabase. A Discord profile is authoritative; if there
+      // is none, fall back to the key session (e.g. the access-key admin).
+      AccountService.getMyProfile().then((profile) => {
+        if (cancelled) return;
+
+        if (profile) {
+          sessionStorage.setItem(ACCOUNT_CACHE.id, profile.id);
+          sessionStorage.setItem(ACCOUNT_CACHE.role, profile.role);
+          sessionStorage.setItem(ACCOUNT_CACHE.name, profile.username);
+          if (profile.avatarUrl) {
+            sessionStorage.setItem(ACCOUNT_CACHE.avatar, profile.avatarUrl);
+          } else {
+            sessionStorage.removeItem(ACCOUNT_CACHE.avatar);
+          }
+          setSession({
+            kind: "discord",
+            id: profile.id,
+            role: profile.role,
+            name: profile.username,
+            avatarUrl: profile.avatarUrl,
+          });
+        } else {
+          Object.values(ACCOUNT_CACHE).forEach((k) =>
+            sessionStorage.removeItem(k),
+          );
+          setSession(readKey());
+        }
+      });
     } catch {
       setSession(null);
     }
@@ -115,13 +117,13 @@ export function useAccountSession() {
     //    the key username slightly after login). Same-tab writes don't fire the
     //    native "storage" event, so we dispatch this one manually.
     const sync = () => {
-      const keyAuth = readKey();
-      if (keyAuth) {
-        setSession(keyAuth);
+      // Same priority as initial load: Discord identity over the auction key.
+      const cached = readDiscordCache();
+      if (cached) {
+        setSession(cached);
         return;
       }
-      const cached = readDiscordCache();
-      if (cached) setSession(cached);
+      setSession(readKey());
     };
     window.addEventListener("storage", sync);
     window.addEventListener("account-session", sync);
@@ -134,13 +136,14 @@ export function useAccountSession() {
 
   const logout = useCallback(async () => {
     try {
+      // Clear BOTH sessions: a Discord bidder may also hold a transient auction
+      // key session, and leaving it behind would make them look signed in again.
+      sessionStorage.removeItem("auction_user_id");
+      sessionStorage.removeItem("auction_user_role");
+      sessionStorage.removeItem("auction_user_name");
+      Object.values(ACCOUNT_CACHE).forEach((k) => sessionStorage.removeItem(k));
       if (session?.kind === "discord") {
-        Object.values(ACCOUNT_CACHE).forEach((k) => sessionStorage.removeItem(k));
         await AccountService.signOut();
-      } else {
-        sessionStorage.removeItem("auction_user_id");
-        sessionStorage.removeItem("auction_user_role");
-        sessionStorage.removeItem("auction_user_name");
       }
     } catch {
       /* ignore */

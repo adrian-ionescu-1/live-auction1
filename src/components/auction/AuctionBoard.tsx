@@ -77,11 +77,11 @@ export default function AuctionBoard() {
     <div className="flex w-full flex-col items-center gap-6">
       <div className="w-full max-w-md animate-fade-up">
         {status === 'countdown' && countdown > 0 && (
-          <div className="rounded-3xl p-8 text-center ring-1 ring-white/10 bg-amber-500/15">
+          <div className="rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 bg-amber-500/15">
             <p className="text-sm font-semibold text-amber-200 mb-2">
               Auction Starting In
             </p>
-            <p className="text-7xl font-extrabold text-zinc-100 tabular-nums">
+            <p className="text-6xl font-extrabold text-zinc-100 tabular-nums sm:text-7xl">
               {countdown}
             </p>
           </div>
@@ -89,7 +89,7 @@ export default function AuctionBoard() {
 
         {status === 'active' && (
           <div
-            className={`rounded-3xl p-8 text-center ring-1 ring-white/10 transition ${
+            className={`rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 transition ${
               timeRemaining <= 10
                 ? 'bg-red-500/18 animate-pulse'
                 : timeRemaining <= 15
@@ -100,14 +100,14 @@ export default function AuctionBoard() {
             <p className="text-sm font-semibold text-zinc-200 mb-2">
               Time Remaining
             </p>
-            <p className="text-7xl font-extrabold text-zinc-100 tabular-nums">
+            <p className="text-6xl font-extrabold text-zinc-100 tabular-nums sm:text-7xl">
               {timeRemaining}s
             </p>
           </div>
         )}
 
         {status === 'paused' && (
-          <div className="rounded-3xl p-8 text-center ring-1 ring-white/10 bg-amber-500/15">
+          <div className="rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 bg-amber-500/15">
             <p className="text-sm font-semibold text-amber-200 mb-2">
               Auction Paused
             </p>
@@ -116,7 +116,7 @@ export default function AuctionBoard() {
         )}
 
         {status === 'result' && currentUserRole !== 'ADMIN' && (
-          <div className="rounded-3xl p-8 text-center ring-1 ring-white/10 bg-cyan-500/12">
+          <div className="rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 bg-cyan-500/12">
             <p className="text-sm font-semibold text-cyan-200 mb-2">Result</p>
             <p className="text-base text-zinc-100">{resultMessage}</p>
           </div>

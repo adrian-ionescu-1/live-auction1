@@ -79,5 +79,30 @@ export interface SupabaseAuctionState {
   round_current_index: number;
   sold_players: string[];
   unsold_players: string[];
+  // The named event the single live auction is currently bound to.
+  event_id: string | null;
   updated_at: string;
+}
+
+// A named auction event (licitație). The reserve fields are derived and stored
+// by admin_create_event: reserve_per_player = entry_fee + margin, and
+// total_reserve = player_limit * reserve_per_player.
+export interface SupabaseAuctionEvent {
+  id: string;
+  name: string;
+  player_limit: number;
+  entry_fee: number;
+  margin: number;
+  reserve_per_player: number;
+  total_reserve: number;
+  member_budget: number;
+  player_duration: number;
+  extend_threshold: number;
+  extend_amount: number;
+  bid_start: number;
+  bid_increments: number[];
+  status: "live" | "finished";
+  created_at: string;
+  available_at: string | null;
+  finished_at: string | null;
 }

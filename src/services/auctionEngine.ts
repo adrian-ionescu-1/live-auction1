@@ -85,6 +85,7 @@ export class AuctionEngine {
         role: u.role,
         wonPlayers: userWonPlayersMap[u.id] || [],
         banned: !!u.banned,
+        profileId: u.profile_id ?? null,
       }));
     } catch (error) {
       console.error('Error in loadUsers:', error);
@@ -228,43 +229,23 @@ export class AuctionEngine {
     }
   }
 
+  /**
+   * Reset the live event via the admin_reset_event RPC: every member's budget
+   * goes back to the event reserve, bids + sold markers are cleared and the room
+   * returns to idle. The reserve/cleanup logic lives server-side (single source
+   * of truth) — no client-side balance math here.
+   */
   static async resetAuction(): Promise<boolean> {
     try {
-      // Clear bids
-      await supabase.from('bids').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-      // Reset balances
-      const { data: users } = await supabase.from('users').select('*');
-      if (users) {
-        for (const user of users) {
-          if (user.role === 'USER') {
-            await supabase.from('users').update({ balance: 10000 }).eq('id', user.id);
-          }
-        }
+      const { data, error } = await supabase.rpc('admin_reset_event');
+      if (error) {
+        console.error('admin_reset_event RPC error:', error);
+        return false;
       }
-
-      // Clear sold markers on players (new server-truth fields)
-      await supabase
-        .from('players')
-        .update({ sold_to_user_id: null, sold_amount: null })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
-      // Reset auction state
-      await this.updateAuctionState({
-        status: 'idle',
-        current_player_id: null,
-        current_player_index: -1,
-        countdown: 3,
-        time_remaining: 30,
-        phase_ends_at: null,
-        current_highest_bid_id: null,
-        current_round: 1,
-        round_total_players: 0,
-        round_current_index: 0,
-        sold_players: [],
-        unsold_players: [],
-      });
-
+      if (data && typeof data === 'object' && data.success === false) {
+        console.error('admin_reset_event failed:', data.error);
+        return false;
+      }
       return true;
     } catch (error) {
       console.error('Error resetting auction:', error);

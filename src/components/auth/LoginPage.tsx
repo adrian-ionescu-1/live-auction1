@@ -113,21 +113,21 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           </div>
         )}
 
-        {/* Access key — secondary, kept for special cases only */}
+        {/* Admin access key — bidders use Discord; only the admin signs in here */}
         {!showKey ? (
           <button
             type="button"
             onClick={() => setShowKey(true)}
             className="mx-auto mt-6 block text-xs font-semibold text-zinc-400 underline-offset-4 transition hover:text-zinc-200 hover:underline"
           >
-            Have an access key?
+            Admin access key
           </button>
         ) : (
           <div className="mt-6 space-y-4">
             <div className="flex items-center gap-3">
               <span className="h-px flex-1 bg-white/10" />
               <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-                access key
+                admin access key
               </span>
               <span className="h-px flex-1 bg-white/10" />
             </div>
@@ -137,7 +137,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                 htmlFor="access-key"
                 className="block text-sm font-medium text-zinc-300 mb-2"
               >
-                Access Key
+                Admin Access Key
               </label>
               <input
                 id="access-key"
@@ -168,7 +168,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             </button>
 
             <p className="text-center text-xs text-zinc-500">
-              Access keys are issued by the admin for special cases.
+              For admins only. Bidders sign in with Discord above.
             </p>
           </div>
         )}

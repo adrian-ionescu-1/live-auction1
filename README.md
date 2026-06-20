@@ -41,11 +41,11 @@ src/
 │  ├─ auth/                  # LoginPage
 │  └─ ui/                    # ConfirmDialog
 │
-├─ store/auctionStore.ts     # Zustand store: realtime channels + actions
-├─ services/                 # auctionEngine (DB/RPC calls), authService
+├─ store/auctionStore.ts     # Zustand store: realtime channels + actions + liveEvent
+├─ services/                 # auctionEngine, authService, eventsService, membersService
 ├─ lib/supabase.ts           # Supabase client
-├─ config/auctionRules.ts    # TARGET_PLAYERS, MIN_PLAYER_COST, calcReserve
-└─ types/auction.types.ts
+├─ config/auctionRules.ts    # DEFAULT_* fallbacks (real rules come from the live event)
+└─ types/                    # auction.types, event.types, account.types
 
 supabase/migrations/         # SQL migrations (run them in the Supabase SQL editor)
 scripts/load-test.mjs        # concurrency / load test

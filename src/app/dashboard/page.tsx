@@ -14,8 +14,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AccountService } from "@/services/accountService";
 import { AuctionEngine } from "@/services/auctionEngine";
+import { EventsService } from "@/services/eventsService";
 import { supabase } from "@/lib/supabase";
 import { Profile, DEFAULT_ACCOUNT_ROLE, BIDDER_ROLE } from "@/types/account.types";
+import { AuctionEvent, MyEventResults } from "@/types/event.types";
 import { GradientCard } from "@/app/_components/ui";
 import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
 import Logo from "@/app/_components/Logo";
@@ -52,6 +54,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [liveEvent, setLiveEvent] = useState<AuctionEvent | null>(null);
+  const [myResults, setMyResults] = useState<MyEventResults[]>([]);
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState<string | null>(null);
 
@@ -82,6 +86,11 @@ export default function DashboardPage() {
         settled = true;
         setProfile(p);
         setLoading(false);
+        // Bidders need the live event (to join) and their past results.
+        if (p.role.toLowerCase() === BIDDER_ROLE) {
+          EventsService.getLiveEvent().then((ev) => setLiveEvent(ev));
+          EventsService.listMyResults(p.id).then((r) => setMyResults(r));
+        }
       } else {
         settled = true;
         router.replace("/login");
@@ -167,33 +176,136 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Bidder: enter the live auction */}
-        {isBidder && (
-          <div className="mt-8 animate-fade-up rounded-2xl bg-emerald-400/10 p-5 ring-1 ring-emerald-400/25 sm:mt-10">
-            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
-              <div>
-                <p className="text-sm font-semibold text-emerald-100">
-                  You&apos;re approved to bid.
-                </p>
-                <p className="mt-1 text-xs text-emerald-200/80">
-                  Join the live auction room to place bids. The admin sets your budget.
-                </p>
+        {/* Bidder: enter the live auction (only when an event is open) */}
+        {isBidder &&
+          (liveEvent && liveEvent.status === "live" ? (
+            <div className="mt-8 animate-fade-up rounded-2xl bg-emerald-400/10 p-5 ring-1 ring-emerald-400/25 sm:mt-10">
+              <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-emerald-200/80">
+                    Live event
+                  </p>
+                  <p className="text-lg font-extrabold text-emerald-100">{liveEvent.name}</p>
+                  <p className="mt-1 text-xs text-emerald-200/80">
+                    Take {liveEvent.playerLimit} players · budget $
+                    {liveEvent.totalReserve.toLocaleString()} (reserve applied automatically).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleEnterAuction}
+                  disabled={entering}
+                  className="w-full shrink-0 rounded-2xl bg-emerald-500/20 px-6 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:opacity-60 sm:w-auto"
+                >
+                  {entering ? "Joining…" : `Enter ${liveEvent.name} →`}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleEnterAuction}
-                disabled={entering}
-                className="w-full shrink-0 rounded-2xl bg-emerald-500/20 px-6 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:opacity-60 sm:w-auto"
-              >
-                {entering ? "Joining…" : "Enter the auction →"}
-              </button>
+              {enterError && (
+                <p className="mt-3 text-center text-xs font-semibold text-red-200">
+                  {enterError}
+                </p>
+              )}
             </div>
-            {enterError && (
-              <p className="mt-3 text-center text-xs font-semibold text-red-200">
-                {enterError}
+          ) : (
+            <div className="mt-8 animate-fade-up rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 sm:mt-10">
+              <p className="text-center text-sm font-semibold text-zinc-200">
+                You&apos;re approved to bid.
               </p>
-            )}
-          </div>
+              <p className="mt-1 text-center text-xs text-zinc-500">
+                {liveEvent && liveEvent.status === "finished"
+                  ? `“${liveEvent.name}” has closed. Your results are below. The next event will appear here when the admin opens one.`
+                  : "There’s no live auction event yet. The button to enter the room will appear here as soon as the admin creates one."}
+              </p>
+            </div>
+          ))}
+
+        {/* Bidder: my results across events */}
+        {isBidder && myResults.length > 0 && (
+          <section className="mt-8 animate-fade-up sm:mt-10">
+            <h2 className="text-lg font-extrabold text-zinc-100 sm:text-xl">My results</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Players you took by bidding, and any received through the random distribution.
+            </p>
+            <div className="mt-4 space-y-4">
+              {myResults.map((ev) => {
+                const won = ev.results.filter((r) => !r.viaRandom);
+                const random = ev.results.filter((r) => r.viaRandom);
+                const spent = won.reduce((s, r) => s + r.amount, 0);
+                return (
+                  <div
+                    key={ev.eventId}
+                    className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10"
+                  >
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-extrabold text-zinc-100">{ev.eventName}</span>
+                      <span className="flex items-center gap-2">
+                        {ev.status === "finished" && (
+                          <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-400/25">
+                            Closed
+                          </span>
+                        )}
+                        <span className="text-xs text-zinc-400">
+                          {ev.results.length} players · ${spent.toLocaleString()} spent
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-200/80">
+                          Won by bidding ({won.length})
+                        </p>
+                        {won.length === 0 ? (
+                          <p className="text-xs text-zinc-500">None.</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {won.map((r) => (
+                              <li
+                                key={r.playerId}
+                                className="flex items-center justify-between gap-2 rounded-lg bg-black/25 px-3 py-1.5 text-sm ring-1 ring-white/10"
+                              >
+                                <span className="min-w-0 flex-1 truncate text-zinc-200">
+                                  {r.playerName}
+                                </span>
+                                <span className="shrink-0 tabular-nums text-zinc-400">
+                                  ${r.amount.toLocaleString()}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+
+                      <div>
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fuchsia-200/80">
+                          Received random ({random.length})
+                        </p>
+                        {random.length === 0 ? (
+                          <p className="text-xs text-zinc-500">None.</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {random.map((r) => (
+                              <li
+                                key={r.playerId}
+                                className="flex items-center justify-between gap-2 rounded-lg bg-black/25 px-3 py-1.5 text-sm ring-1 ring-white/10"
+                              >
+                                <span className="min-w-0 flex-1 truncate text-zinc-200">
+                                  {r.playerName}
+                                </span>
+                                <span className="shrink-0 text-xs font-semibold text-fuchsia-200">
+                                  Free
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {/* Pending-role notice for fresh accounts */}

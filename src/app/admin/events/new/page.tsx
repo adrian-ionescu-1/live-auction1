@@ -1,0 +1,552 @@
+// Create a named auction event, configured top to bottom in a logical order:
+//   1. Identity  — the event name.
+//   2. Target    — players each member must take.
+//   3. Bidding   — opening bid + the "+N" increment buttons (these drive the reserve).
+//   4. Reserve & budget — reserve = opening + smallest button; budget >= reserve.
+//   5. Timer     — seconds per player + the anti-snipe extension rule.
+// On the right: the members enrolled (current bidders) and the players that go up.
+
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { MembersService } from "@/services/membersService";
+import { EventsService } from "@/services/eventsService";
+import { AuctionEngine } from "@/services/auctionEngine";
+import { Member } from "@/types/account.types";
+import { Player } from "@/types/auction.types";
+import { useMembersPresence } from "@/app/_components/useMembersPresence";
+import EventMembersCard from "@/components/admin/EventMembersCard";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+
+const inputClass =
+  "w-full rounded-xl bg-black/30 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40";
+
+function Section({
+  step,
+  title,
+  desc,
+  children,
+}: {
+  step: number;
+  title: string;
+  desc?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25">
+          {step}
+        </span>
+        <div>
+          <h2 className="text-base font-extrabold text-zinc-100">{title}</h2>
+          {desc && <p className="mt-0.5 text-xs text-zinc-500">{desc}</p>}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-sm font-semibold text-zinc-300">{label}</span>
+      {hint && <span className="mt-0.5 block text-xs text-zinc-500">{hint}</span>}
+      <div className="mt-2">{children}</div>
+    </label>
+  );
+}
+
+function MoneyInput({
+  value,
+  onChange,
+  min = 0,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  min?: number;
+}) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">
+        $
+      </span>
+      <input
+        type="number"
+        min={min}
+        className={`${inputClass} pl-7`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+// Editor for the preset "+N" bid buttons. Chips with remove + a custom adder.
+function IncrementEditor({
+  values,
+  onChange,
+}: {
+  values: number[];
+  onChange: (next: number[]) => void;
+}) {
+  const [custom, setCustom] = useState("");
+
+  const add = (n: number) => {
+    if (!n || n <= 0 || values.includes(n)) return;
+    onChange([...values, n].sort((a, b) => a - b));
+  };
+  const remove = (n: number) => onChange(values.filter((v) => v !== n));
+
+  const quick = [5, 10, 25, 50, 100, 250, 500, 1000].filter((n) => !values.includes(n));
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {values.length === 0 && (
+          <span className="text-xs text-amber-200">Add at least one bid button.</span>
+        )}
+        {values.map((n) => (
+          <span
+            key={n}
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-bold text-emerald-200 ring-1 ring-emerald-400/25"
+          >
+            +{n}
+            <button
+              type="button"
+              onClick={() => remove(n)}
+              aria-label={`Remove +${n}`}
+              className="text-emerald-300/70 transition hover:text-emerald-100"
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {quick.map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => add(n)}
+            className="rounded-lg bg-white/5 px-2.5 py-1 text-xs font-semibold text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-zinc-100"
+          >
+            +{n}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="number"
+          min={1}
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          placeholder="Custom amount"
+          className={inputClass}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            add(Math.floor(Number(custom) || 0));
+            setCustom("");
+          }}
+          className="shrink-0 rounded-xl bg-emerald-500/15 px-4 py-2 text-sm font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function CreateEventPage() {
+  const router = useRouter();
+  const onlineIds = useMembersPresence();
+
+  // 1. Identity
+  const [name, setName] = useState("");
+  // 2. Target
+  const [playerLimit, setPlayerLimit] = useState("8");
+  // 3. Bidding (drives the reserve)
+  const [openingBid, setOpeningBid] = useState("100");
+  const [bidIncrements, setBidIncrements] = useState<number[]>([10, 50, 100]);
+  // 4. Member budget (auto-synced to reserve until edited)
+  const [memberBudget, setMemberBudget] = useState("880");
+  const [budgetTouched, setBudgetTouched] = useState(false);
+  // 5. Timer
+  const [playerDuration, setPlayerDuration] = useState("30");
+  const [extendThreshold, setExtendThreshold] = useState("10");
+  const [extendAmount, setExtendAmount] = useState("5");
+
+  const [bidders, setBidders] = useState<Member[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([MembersService.getAllMembers(), AuctionEngine.loadPlayers()]).then(
+      ([members, ps]) => {
+        if (!active) return;
+        setBidders(members.filter((m) => m.role.toLowerCase() === "bidder"));
+        setPlayers(ps);
+        setLoading(false);
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Derived reserve math, mirrored from the server (admin_create_event):
+  // the cheapest a member can secure a player is opening + smallest button, so
+  // the reserve per player equals exactly that.
+  const limitNum = Math.max(0, Math.floor(Number(playerLimit) || 0));
+  const openingNum = Math.max(0, Math.floor(Number(openingBid) || 0));
+  const minIncrement =
+    bidIncrements.length > 0 ? Math.min(...bidIncrements) : 0;
+  const reservePerPlayer = openingNum + minIncrement;
+  const totalReserve = limitNum * reservePerPlayer;
+
+  // Keep the budget glued to the reserve until the admin types their own value.
+  useEffect(() => {
+    if (!budgetTouched) setMemberBudget(String(totalReserve));
+  }, [totalReserve, budgetTouched]);
+
+  const budgetNum = Math.max(0, Math.floor(Number(memberBudget) || 0));
+  const surplus = Math.max(0, budgetNum - totalReserve);
+  const durationNum = Math.max(1, Math.floor(Number(playerDuration) || 0));
+  const thresholdNum = Math.max(0, Math.floor(Number(extendThreshold) || 0));
+  const extendNum = Math.max(0, Math.floor(Number(extendAmount) || 0));
+
+  const nameValid = name.trim().length > 0;
+  const limitValid = limitNum >= 1;
+  const incrementsValid = bidIncrements.length > 0;
+  const budgetValid = budgetNum >= totalReserve;
+  const canSubmit =
+    nameValid && limitValid && incrementsValid && budgetValid && !submitting;
+
+  const accessMembers = useMemo(
+    () =>
+      bidders.map((m) => ({
+        id: m.id,
+        username: m.username,
+        avatarUrl: m.avatarUrl,
+        banned: m.banned,
+      })),
+    [bidders]
+  );
+
+  const handleCreate = async () => {
+    setSubmitting(true);
+    setError(null);
+    const res = await EventsService.createEvent({
+      name: name.trim(),
+      playerLimit: limitNum,
+      openingBid: openingNum,
+      memberBudget: budgetNum,
+      playerDuration: durationNum,
+      extendThreshold: thresholdNum,
+      extendAmount: extendNum,
+      bidIncrements,
+    });
+    setConfirmOpen(false);
+    if (res.success) {
+      router.push("/admin/events");
+    } else {
+      setError(res.error ?? "Could not create the event");
+      setSubmitting(false);
+    }
+  };
+
+  const extendPresets = [1, 5, 10];
+
+  return (
+    <>
+      <div className="animate-fade-up">
+        <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
+          Create event
+        </h1>
+        <p className="mt-2 text-sm text-zinc-400">
+          Configure the rules below. The reserve and the minimum budget are calculated
+          automatically from the bidding setup, so every member can always reach their target.
+        </p>
+      </div>
+
+      <div className="mt-6 grid animate-fade-up gap-6 lg:grid-cols-3">
+        {/* Form */}
+        <form
+          className="space-y-5 lg:col-span-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (canSubmit) setConfirmOpen(true);
+          }}
+        >
+          {/* 1. Identity */}
+          <Section step={1} title="Identity" desc="Shown to bidders when they enter the room.">
+            <Field label="Event name">
+              <input
+                className={inputClass}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Spring Draft 2026"
+                maxLength={80}
+              />
+            </Field>
+          </Section>
+
+          {/* 2. Target */}
+          <Section step={2} title="Target" desc="How many players each member must take.">
+            <Field label="Players / member">
+              <input
+                type="number"
+                min={1}
+                className={`${inputClass} sm:max-w-[12rem]`}
+                value={playerLimit}
+                onChange={(e) => setPlayerLimit(e.target.value)}
+              />
+            </Field>
+          </Section>
+
+          {/* 3. Bidding */}
+          <Section
+            step={3}
+            title="Bidding"
+            desc="The opening bid and the quick buttons. These decide the reserve below."
+          >
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field
+                label="Opening bid (entry)"
+                hint="The starting price for each player."
+              >
+                <MoneyInput value={openingBid} onChange={setOpeningBid} />
+              </Field>
+            </div>
+            <div className="mt-5">
+              <span className="block text-sm font-semibold text-zinc-300">Bid buttons</span>
+              <span className="mt-0.5 block text-xs text-zinc-500">
+                The increment buttons bidders tap (e.g. +10, +50, +100). The smallest one sets
+                the reserve, since the first bid is always opening + smallest button.
+              </span>
+              <div className="mt-3">
+                <IncrementEditor values={bidIncrements} onChange={setBidIncrements} />
+              </div>
+            </div>
+          </Section>
+
+          {/* 4. Reserve & budget */}
+          <Section
+            step={4}
+            title="Reserve & budget"
+            desc="Calculated from the bidding setup. The budget can be higher, never lower."
+          >
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
+                <div className="text-xs uppercase tracking-wide text-zinc-400">
+                  Reserve / player
+                </div>
+                <div className="mt-1 text-2xl font-extrabold tabular-nums text-cyan-200">
+                  ${reservePerPlayer.toLocaleString()}
+                </div>
+                <div className="mt-0.5 text-[11px] text-zinc-500">
+                  ${openingNum} opening + ${minIncrement} button
+                </div>
+              </div>
+              <div className="rounded-2xl bg-cyan-500/10 p-4 ring-1 ring-cyan-400/25">
+                <div className="text-xs uppercase tracking-wide text-cyan-200/80">
+                  Reserve / member
+                </div>
+                <div className="mt-1 text-2xl font-extrabold tabular-nums text-cyan-200">
+                  ${totalReserve.toLocaleString()}
+                </div>
+                <div className="mt-0.5 text-[11px] text-cyan-200/70">
+                  {limitNum} × ${reservePerPlayer.toLocaleString()}
+                </div>
+              </div>
+              <div className="col-span-2 rounded-2xl bg-emerald-500/10 p-4 ring-1 ring-emerald-400/25 sm:col-span-1">
+                <div className="text-xs uppercase tracking-wide text-emerald-200/80">
+                  Spendable surplus
+                </div>
+                <div className="mt-1 text-2xl font-extrabold tabular-nums text-emerald-200">
+                  ${surplus.toLocaleString()}
+                </div>
+                <div className="mt-0.5 text-[11px] text-emerald-200/70">
+                  extra for stars, above the reserve
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <Field label="Budget / member" hint={`Minimum $${totalReserve.toLocaleString()} (the reserve).`}>
+                  <MoneyInput
+                    value={memberBudget}
+                    onChange={(v) => {
+                      setBudgetTouched(true);
+                      setMemberBudget(v);
+                    }}
+                    min={totalReserve}
+                  />
+                </Field>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setBudgetTouched(false);
+                  setMemberBudget(String(totalReserve));
+                }}
+                className="rounded-xl bg-white/5 px-4 py-3 text-sm font-semibold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
+              >
+                Reset to reserve
+              </button>
+            </div>
+            {!budgetValid && (
+              <p className="mt-2 text-xs font-semibold text-amber-200">
+                Budget can&apos;t be below the reserve of ${totalReserve.toLocaleString()}.
+              </p>
+            )}
+          </Section>
+
+          {/* 5. Timer */}
+          <Section
+            step={5}
+            title="Timer"
+            desc="How long each player runs and how a late bid extends the clock (anti-snipe)."
+          >
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field label="Seconds / player" hint="Length of the active phase.">
+                <input
+                  type="number"
+                  min={1}
+                  className={inputClass}
+                  value={playerDuration}
+                  onChange={(e) => setPlayerDuration(e.target.value)}
+                />
+              </Field>
+              <Field label="Extend when ≤" hint="Seconds left that trigger an extend.">
+                <input
+                  type="number"
+                  min={0}
+                  className={inputClass}
+                  value={extendThreshold}
+                  onChange={(e) => setExtendThreshold(e.target.value)}
+                />
+              </Field>
+              <Field label="Add seconds" hint="Added per qualifying bid.">
+                <div className="space-y-2">
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={extendAmount}
+                    onChange={(e) => setExtendAmount(e.target.value)}
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    {extendPresets.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setExtendAmount(String(n))}
+                        className={`rounded-lg px-2 py-1.5 text-xs font-bold ring-1 transition ${
+                          extendNum === n
+                            ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                            : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                        }`}
+                      >
+                        +{n}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </Field>
+            </div>
+            <p className="mt-4 rounded-xl bg-black/25 px-3 py-2 text-xs text-zinc-400 ring-1 ring-white/10">
+              Example: a player runs {durationNum}s. If a bid lands with {thresholdNum}s or
+              less left, the clock jumps to {Math.min(extendNum + thresholdNum, durationNum)}s
+              (adds {extendNum}s, capped at {durationNum}s).
+            </p>
+          </Section>
+
+          {error && <p className="text-sm font-semibold text-red-200">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="w-full rounded-2xl bg-emerald-500/20 px-6 py-3.5 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {submitting ? "Creating…" : "Create event & apply rules"}
+          </button>
+        </form>
+
+        {/* Right column: members + players */}
+        <div className="space-y-6 lg:col-span-1">
+          <EventMembersCard
+            title="Members with access"
+            subtitle="Everyone with the Bidder role is enrolled automatically when you create the event."
+            members={accessMembers}
+            onlineIds={onlineIds}
+            emptyHint="No bidders yet. Promote members to Bidder in the Members tab."
+          />
+
+          <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-zinc-100">Players up for auction</h3>
+              <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-zinc-300 ring-1 ring-white/10">
+                {players.length}
+              </span>
+            </div>
+            {loading ? (
+              <div className="h-24 animate-pulse rounded-2xl bg-black/25" />
+            ) : players.length === 0 ? (
+              <p className="text-sm text-zinc-500">
+                No players in the database yet. Seed the players table to auction them.
+              </p>
+            ) : (
+              <ol className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                {players.map((p, i) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center gap-3 rounded-xl bg-black/25 px-3 py-2 ring-1 ring-white/10"
+                  >
+                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-white/5 text-xs font-bold tabular-nums text-zinc-400 ring-1 ring-white/10">
+                      {i + 1}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
+                      {p.name}
+                    </span>
+                    <span className="shrink-0 text-xs tabular-nums text-zinc-500">
+                      ${p.basePrice.toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        isOpen={confirmOpen}
+        title="Create this event?"
+        message={`"${name.trim()}" — ${limitNum} players/member, opening $${openingNum.toLocaleString()}, reserve $${totalReserve.toLocaleString()}, budget $${budgetNum.toLocaleString()} each. ${durationNum}s per player. ${accessMembers.length} member(s) enrolled. This becomes the live event.`}
+        onConfirm={handleCreate}
+        onCancel={() => setConfirmOpen(false)}
+      />
+    </>
+  );
+}

@@ -1,29 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import { AuctionEngine } from '@/services/auctionEngine';
 import { User } from '@/types/auction.types';
 import TargetProgress from './TargetProgress';
-import { TARGET_PLAYERS, calcReserve } from '@/config/auctionRules';
+import {
+  DEFAULT_TARGET_PLAYERS,
+  DEFAULT_RESERVE_PER_PLAYER,
+  calcReserve,
+} from '@/config/auctionRules';
 
-// Admin controls on a participant: set their budget + ban / unban. Reads stay
-// live via the store's realtime users channel, so we just fire the RPCs.
+// Admin ban / unban control on a participant. The per-bidder budget is no longer
+// set here — it is applied automatically from the event reserve when the event
+// is created. Reads stay live via the store's realtime users channel.
 function AdminParticipantActions({ user }: { user: User }) {
-  const [budget, setBudget] = useState(String(user.balance ?? 0));
   const [busy, setBusy] = useState(false);
-
-  // Keep the input in sync if the balance changes elsewhere (e.g. a settle).
-  useEffect(() => {
-    setBudget(String(user.balance ?? 0));
-  }, [user.balance]);
-
-  const saveBudget = async () => {
-    const value = Math.max(0, Math.round(Number(budget) || 0));
-    setBusy(true);
-    await AuctionEngine.setParticipantBalance(user.id, value);
-    setBusy(false);
-  };
 
   const toggleBan = async () => {
     setBusy(true);
@@ -32,31 +24,7 @@ function AdminParticipantActions({ user }: { user: User }) {
   };
 
   return (
-    <div className="mt-4 space-y-2 border-t border-white/10 pt-3">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">
-            $
-          </span>
-          <input
-            type="number"
-            min={0}
-            value={budget}
-            onChange={(e) => setBudget(e.target.value)}
-            disabled={busy}
-            aria-label={`Budget for ${user.username}`}
-            className="w-full rounded-xl bg-black/30 py-2 pl-6 pr-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:opacity-60"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={saveBudget}
-          disabled={busy}
-          className="rounded-xl bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25 disabled:opacity-60"
-        >
-          Set budget
-        </button>
-      </div>
+    <div className="mt-4 border-t border-white/10 pt-3">
       <button
         type="button"
         onClick={toggleBan}
@@ -74,17 +42,19 @@ function AdminParticipantActions({ user }: { user: User }) {
 }
 
 export default function AdminUserCards() {
-  const { currentUserRole, users, onlineUserIds } = useAuctionStore();
+  const { currentUserRole, users, onlineUserIds, liveEvent } = useAuctionStore();
 
   if (currentUserRole !== 'ADMIN') {
     return null;
   }
 
   const online = new Set(onlineUserIds);
+  const target = liveEvent?.playerLimit ?? DEFAULT_TARGET_PLAYERS;
+  const reservePerPlayer = liveEvent?.reservePerPlayer ?? DEFAULT_RESERVE_PER_PLAYER;
 
-  // Show every participant. They stay on the board for the whole auction (they
-  // don't drop off when they disconnect); the list resets with the auction.
-  const participants = users.filter((u) => u.role === 'USER');
+  // Only real event participants (provisioned from a Discord member). Legacy
+  // key-based rows have no profileId and are intentionally hidden.
+  const participants = users.filter((u) => u.role === 'USER' && u.profileId);
 
   const onlineCount = participants.filter((u) => online.has(u.id)).length;
   const bannedCount = participants.filter((u) => u.banned).length;
@@ -116,8 +86,8 @@ export default function AdminUserCards() {
         <div className="rounded-2xl bg-black/25 ring-1 ring-white/10 p-8 text-center">
           <p className="text-sm font-semibold text-zinc-300">No participants yet</p>
           <p className="mt-1 text-xs text-zinc-500">
-            Bidders who enter the auction appear here. Set their budget and ban /
-            unban them from each card.
+            Bidders enrolled in the live event appear here. Their budget is set
+            automatically from the event reserve; you can ban / unban from each card.
           </p>
         </div>
       ) : (
@@ -128,12 +98,12 @@ export default function AdminUserCards() {
 
             const totalSpent = wonPlayers.reduce((sum, p) => sum + (p?.amount || 0), 0);
 
-            const remainingSlots = Math.max(0, TARGET_PLAYERS - wonCount);
-            const reserved = calcReserve(remainingSlots);
+            const remainingSlots = Math.max(0, target - wonCount);
+            const reserved = calcReserve(remainingSlots, reservePerPlayer);
             const balance = user.balance || 0;
             const spendable = Math.max(0, balance - reserved);
 
-            const completed = wonCount >= TARGET_PLAYERS;
+            const completed = wonCount >= target;
             const isOnline = online.has(user.id);
 
             return (
@@ -202,7 +172,7 @@ export default function AdminUserCards() {
                 </div>
 
                 {/* Target progress */}
-                <TargetProgress wonCount={wonCount} />
+                <TargetProgress wonCount={wonCount} target={target} />
 
                 {/* Players won list */}
                 <div className="mt-3">

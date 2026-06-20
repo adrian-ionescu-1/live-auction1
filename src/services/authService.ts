@@ -24,6 +24,13 @@ export class AuthService {
 
       const typedAuthKey = authKey as SupabaseAuthKey;
 
+      // Access keys are now admin-only. Bidders sign in with Discord; only the
+      // admin still uses a key. Reject any non-admin key defensively, even if a
+      // stray one survived the cleanup migration.
+      if (typedAuthKey.role !== 'ADMIN') {
+        return { success: false, error: 'Access keys are for admins only. Bidders sign in with Discord.' };
+      }
+
       // MODIFICATION: Check if user already exists with this key
       const { data: existingUser, error: existingUserError } = await supabase
         .from('users')
@@ -53,14 +60,13 @@ export class AuthService {
         return { success: true, user };
       }
 
-      // User doesn't exist yet, create new user
-      const initialBalance = typedAuthKey.role === 'USER' ? 10000 : 0;
-      
+      // Admin key with no user row yet — create the admin participant (no budget;
+      // admins don't bid). Only ADMIN keys reach here (guarded above).
       const { data: newUser, error: userError } = await supabase
         .from('users')
         .insert({
           username: typedAuthKey.user_name,
-          balance: initialBalance,
+          balance: 0,
           role: typedAuthKey.role,
           auth_key_id: typedAuthKey.id,
         })

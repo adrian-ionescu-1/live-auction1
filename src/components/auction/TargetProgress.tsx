@@ -1,12 +1,19 @@
 'use client';
 
-import { TARGET_PLAYERS } from '@/config/auctionRules';
+import { DEFAULT_TARGET_PLAYERS } from '@/config/auctionRules';
 
-export default function TargetProgress({ wonCount }: { wonCount: number }) {
-  const clamped = Math.min(Math.max(wonCount, 0), TARGET_PLAYERS);
-  const pct = (clamped / TARGET_PLAYERS) * 100;
+export default function TargetProgress({
+  wonCount,
+  target = DEFAULT_TARGET_PLAYERS,
+}: {
+  wonCount: number;
+  target?: number;
+}) {
+  const safeTarget = target > 0 ? target : DEFAULT_TARGET_PLAYERS;
+  const clamped = Math.min(Math.max(wonCount, 0), safeTarget);
+  const pct = (clamped / safeTarget) * 100;
 
-  const completed = clamped >= TARGET_PLAYERS;
+  const completed = clamped >= safeTarget;
 
   return (
     <div className="mt-3">
@@ -17,7 +24,7 @@ export default function TargetProgress({ wonCount }: { wonCount: number }) {
             completed ? 'text-emerald-200' : 'text-zinc-200'
           }`}
         >
-          {clamped}/{TARGET_PLAYERS}
+          {clamped}/{safeTarget}
         </span>
       </div>
 

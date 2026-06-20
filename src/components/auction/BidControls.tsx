@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
-import { TARGET_PLAYERS, MIN_PLAYER_COST } from '@/config/auctionRules';
+import {
+  DEFAULT_TARGET_PLAYERS,
+  DEFAULT_RESERVE_PER_PLAYER,
+} from '@/config/auctionRules';
 
-const PRESET_BIDS = [10, 50, 100, 500, 1000];
+const DEFAULT_PRESET_BIDS = [10, 50, 100, 500, 1000];
 
 export default function BidControls() {
   const {
@@ -15,22 +18,34 @@ export default function BidControls() {
     placeBid,
     status,
     currentPlayer,
+    liveEvent,
   } = useAuctionStore();
 
   const [bidError, setBidError] = useState<string | null>(null);
 
   const currentUser = users.find((u) => u.id === currentUserId);
 
-  // ---- TARGET / RESERVE LOGIC (NEW) ----
+  // ---- TARGET / RESERVE LOGIC (event-driven) ----
+  const target = liveEvent?.playerLimit ?? DEFAULT_TARGET_PLAYERS;
+  const reservePerPlayer = liveEvent?.reservePerPlayer ?? DEFAULT_RESERVE_PER_PLAYER;
+
   const wonCount = currentUser?.wonPlayers?.length ?? 0;
-  const reachedTarget = wonCount >= TARGET_PLAYERS;
+  const reachedTarget = wonCount >= target;
+
+  // Event-specific bid buttons + opening bid.
+  const increments =
+    liveEvent?.bidIncrements && liveEvent.bidIncrements.length > 0
+      ? liveEvent.bidIncrements
+      : DEFAULT_PRESET_BIDS;
+  const openingBase =
+    liveEvent && liveEvent.bidStart > 0 ? liveEvent.bidStart : currentPlayer?.basePrice || 0;
 
   const isActive = status === 'active';
   const isBanned = !!currentUser?.banned;
 
   // after winning the current player, how many slots are left?
-  const remainingAfterWin = Math.max(0, TARGET_PLAYERS - (wonCount + 1));
-  const requiredAfterWin = remainingAfterWin * MIN_PLAYER_COST;
+  const remainingAfterWin = Math.max(0, target - (wonCount + 1));
+  const requiredAfterWin = remainingAfterWin * reservePerPlayer;
 
   const canBid =
     !!currentUser &&
@@ -43,9 +58,7 @@ export default function BidControls() {
   const handlePresetBid = async (increment: number) => {
     setBidError(null);
 
-    const baseAmount = currentHighestBid
-      ? currentHighestBid.amount
-      : currentPlayer?.basePrice || 0;
+    const baseAmount = currentHighestBid ? currentHighestBid.amount : openingBase;
 
     const bidAmount = baseAmount + increment;
 
@@ -56,7 +69,7 @@ export default function BidControls() {
     if (bidAmount > maxAllowedBid) {
       setBidError(
         reachedTarget
-          ? `Target reached (${TARGET_PLAYERS}/${TARGET_PLAYERS}). You can’t bid anymore.`
+          ? `Target reached (${target}/${target}). You can’t bid anymore.`
           : `You must keep at least $${requiredAfterWin.toLocaleString()} reserved to complete your target.`
       );
       setTimeout(() => setBidError(null), 3500);
@@ -97,11 +110,19 @@ export default function BidControls() {
   }
 
   return (
-    <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6">
-      <h3 className="text-base font-extrabold tracking-wide text-zinc-100 mb-4">
-        Place Your Bid
-      </h3>
+    <div className="w-full max-w-md animate-fade-up overflow-hidden rounded-3xl bg-white/5 ring-1 ring-white/10 backdrop-blur-sm lg:max-w-none">
+      {/* Header */}
+      <div className="relative border-b border-white/10 bg-gradient-to-r from-emerald-500/10 via-cyan-500/5 to-transparent px-4 py-3 sm:px-5">
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+        <div className="flex items-center gap-2">
+          <span aria-hidden>💸</span>
+          <h3 className="text-sm font-extrabold tracking-wide text-zinc-100">
+            Place your bid
+          </h3>
+        </div>
+      </div>
 
+      <div className="p-4 sm:p-5">
       {/* Current highest bid display */}
       <div className="mb-4">
         {currentHighestBid ? (
@@ -122,7 +143,7 @@ export default function BidControls() {
           <div className="rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
             <p className="text-xs text-zinc-400">No bids yet</p>
             <p className="text-base font-semibold text-zinc-200">
-              Base: ${currentPlayer?.basePrice.toLocaleString()}
+              Opening: ${openingBase.toLocaleString()}
             </p>
           </div>
         )}
@@ -156,7 +177,7 @@ export default function BidControls() {
       {reachedTarget && (
         <div className="rounded-2xl bg-emerald-500/12 ring-1 ring-emerald-400/20 p-3 mb-3">
           <p className="text-sm text-emerald-200 text-center font-semibold">
-            Target completed ({TARGET_PLAYERS}/{TARGET_PLAYERS}). Bidding is locked.
+            Target completed ({target}/{target}). Bidding is locked.
           </p>
         </div>
       )}
@@ -169,10 +190,8 @@ export default function BidControls() {
           </p>
 
           <div className="grid grid-cols-3 gap-3">
-            {PRESET_BIDS.map((increment) => {
-              const baseAmount = currentHighestBid
-                ? currentHighestBid.amount
-                : currentPlayer?.basePrice || 0;
+            {increments.map((increment) => {
+              const baseAmount = currentHighestBid ? currentHighestBid.amount : openingBase;
 
               const totalBid = baseAmount + increment;
 
@@ -226,6 +245,7 @@ export default function BidControls() {
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 }

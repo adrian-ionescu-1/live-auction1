@@ -20,7 +20,7 @@ import AccountMenu from "@/app/_components/AccountMenu";
 
 export default function AuctionRoomPage() {
   const router = useRouter();
-  const { currentUserId, currentUserRole, users, status, login, dismissResults } =
+  const { currentUserId, currentUserRole, users, status, login, logout } =
     useAuctionStore();
 
   const [hydrated, setHydrated] = useState(false);
@@ -125,15 +125,18 @@ export default function AuctionRoomPage() {
     );
   }
 
-  const handleCloseResults = () => {
-    dismissResults();
+  // A member leaving the finished auction goes back to their dashboard; the
+  // closed event can't be re-entered, so we drop the auction session too.
+  const handleReturnToDashboard = () => {
+    logout();
+    router.push("/dashboard");
   };
 
   if (status === "finished" && currentUserRole !== "ADMIN") {
     return (
       <>
         <AccountTopBar />
-        <ResultsView onClose={handleCloseResults} />
+        <ResultsView onClose={handleReturnToDashboard} />
       </>
     );
   }
@@ -142,8 +145,9 @@ export default function AuctionRoomPage() {
     <main className="relative min-h-screen px-3 pb-10 pt-16 sm:px-4 sm:py-8">
       <AccountTopBar />
 
-      {/* subtle overlay to keep readability over the global background */}
-      <div className="mx-auto max-w-7xl animate-fade-up rounded-3xl bg-black/30 p-4 ring-1 ring-white/10 backdrop-blur-sm sm:p-8">
+      {/* No page-wide card: the global background shows through; each panel
+          carries its own surface. */}
+      <div className="mx-auto max-w-7xl animate-fade-up">
         <div className="mb-8 text-center">
           <h1 className="mb-2 text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-4xl lg:text-5xl">
             Live{" "}
@@ -170,9 +174,11 @@ export default function AuctionRoomPage() {
             {currentUserRole === "ADMIN" ? <BiddersList /> : <BidControls />}
           </div>
 
-          {/* Balance / admin / history — left column on desktop, last on mobile */}
+          {/* Balance / admin / history — left column on desktop, last on mobile.
+              Admins don't bid, so their identity/log-out lives in the top-right
+              account card; no balance panel for them. */}
           <div className="order-3 flex flex-col items-center gap-6 animate-fade-up [animation-delay:200ms] lg:order-1">
-            <UserBalance />
+            {currentUserRole !== "ADMIN" && <UserBalance />}
             {currentUserRole === "ADMIN" && <AdminControls />}
             <BidHistory />
           </div>
