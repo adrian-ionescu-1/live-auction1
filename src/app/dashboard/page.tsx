@@ -180,6 +180,7 @@ export default function DashboardPage() {
   const role = roleStyle(profile.role);
   const isGuest = profile.role.toLowerCase() === DEFAULT_ACCOUNT_ROLE;
   const isBidder = profile.role.toLowerCase() === BIDDER_ROLE;
+  const isAdmin = profile.role.toLowerCase() === "admin";
   const memberSince = new Date(profile.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
@@ -223,6 +224,31 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Admin: shortcut into the admin control center. */}
+        {isAdmin && (
+          <div className="mt-8 animate-fade-up rounded-2xl bg-fuchsia-400/10 p-5 ring-1 ring-fuchsia-400/25 sm:mt-10">
+            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-fuchsia-200/80">
+                  Admin access
+                </p>
+                <p className="text-lg font-extrabold text-fuchsia-100">
+                  You have admin rights
+                </p>
+                <p className="mt-1 text-xs text-fuchsia-200/80">
+                  Manage members, roles, events and the live auction room.
+                </p>
+              </div>
+              <Link
+                href="/admin"
+                className="w-full shrink-0 rounded-2xl bg-fuchsia-500/20 px-6 py-3 text-center text-sm font-bold text-fuchsia-100 ring-1 ring-fuchsia-400/30 transition hover:bg-fuchsia-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60 sm:w-auto"
+              >
+                Open admin dashboard →
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Bidder: enter the live auction (only once the event has opened) */}
         {isBidder &&

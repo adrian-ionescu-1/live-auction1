@@ -69,7 +69,7 @@ export default function AccountMenu({
   /** When signed out: show the "Sign in" button (true) or render nothing. */
   loggedOutCta?: boolean;
 }) {
-  const { mounted, session, roleLabel, displayName, initials, primaryAction, logout } =
+  const { mounted, session, isAdmin, roleLabel, displayName, initials, primaryAction, logout } =
     useAccountSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -193,6 +193,32 @@ export default function AccountMenu({
               </svg>
               {primaryAction.label}
             </Link>
+
+            {/* Discord members promoted to admin reach the admin area from here;
+                the key admin already gets it as their primary action above. */}
+            {isAdmin && session!.kind === "discord" && (
+              <Link
+                href="/admin"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-fuchsia-200 transition hover:bg-fuchsia-500/15 hover:text-fuchsia-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/50"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z" />
+                </svg>
+                Admin dashboard
+              </Link>
+            )}
 
             <Link
               href="/"
