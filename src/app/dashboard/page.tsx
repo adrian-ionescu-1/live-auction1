@@ -16,10 +16,16 @@ import { AccountService } from "@/services/accountService";
 import { AuctionEngine } from "@/services/auctionEngine";
 import { EventsService } from "@/services/eventsService";
 import { supabase } from "@/lib/supabase";
-import { Profile, DEFAULT_ACCOUNT_ROLE, BIDDER_ROLE } from "@/types/account.types";
+import {
+  Profile,
+  DEFAULT_ACCOUNT_ROLE,
+  BIDDER_ROLE,
+  EXCLUDED_ROLE,
+} from "@/types/account.types";
 import { AuctionEvent, MyEventResults } from "@/types/event.types";
 import { GradientCard } from "@/app/_components/ui";
 import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
+import ExcludedScreen from "@/app/_components/ExcludedScreen";
 import Logo from "@/app/_components/Logo";
 
 type RoleStyle = { label: string; chip: string };
@@ -175,6 +181,12 @@ export default function DashboardPage() {
         </div>
       </main>
     );
+  }
+
+  // Excluded members never see the dashboard: a full-screen lock replaces it,
+  // re-applied on every load while the role stays. Check before anything else.
+  if (profile.role.toLowerCase() === EXCLUDED_ROLE) {
+    return <ExcludedScreen />;
   }
 
   const role = roleStyle(profile.role);
