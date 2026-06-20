@@ -90,7 +90,9 @@ export class AccountService {
     return {
       id: profile.id,
       discordId: profile.discord_id,
-      username: profile.username ?? fallback.username,
+      // The admin-set display name wins, so the member sees the same name
+      // everyone else does.
+      username: profile.display_name ?? profile.username ?? fallback.username,
       avatarUrl: profile.avatar_url ?? fallback.avatarUrl,
       role: profile.role,
       createdAt: profile.created_at,

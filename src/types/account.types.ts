@@ -25,7 +25,12 @@ export const BIDDER_ROLE = "bidder";
 /** A community member (Discord account) as seen in the admin directory. */
 export interface Member {
   id: string;
+  /** The name shown everywhere: the admin override if set, else the original. */
   username: string;
+  /** The name the member registered with on Discord (never changes). */
+  originalUsername: string;
+  /** Admin-set display name override, or null when none is set. */
+  displayName: string | null;
   avatarUrl: string | null;
   role: string;
   banned: boolean;
