@@ -8,6 +8,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { Member } from "@/types/account.types";
 import { MembersService } from "@/services/membersService";
 import { ASSIGNABLE_ROLES, roleMeta } from "./roleMeta";
+import GrantAdminDialog from "./GrantAdminDialog";
 
 export default function MemberActions({
   member,
@@ -23,6 +24,9 @@ export default function MemberActions({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nameInput, setNameInput] = useState(member.username);
+  // Granting Admin is gated behind the two-step danger dialog instead of being
+  // applied on click like every other role.
+  const [confirmAdmin, setConfirmAdmin] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Reset the editable name to the current one each time the popover opens.
@@ -51,11 +55,29 @@ export default function MemberActions({
       setOpen(false);
       return;
     }
+    // Promoting to Admin is dangerous: route it through the confirmation dialog
+    // rather than applying it immediately.
+    if (role === "admin") {
+      setConfirmAdmin(true);
+      return;
+    }
     setBusy(true);
     const ok = await MembersService.setRole(member.id, role);
     setBusy(false);
     if (ok) {
       onChange({ ...member, role });
+      setOpen(false);
+    }
+  };
+
+  // Runs only after the admin clears both steps of the danger dialog.
+  const confirmGrantAdmin = async () => {
+    setBusy(true);
+    const ok = await MembersService.setRole(member.id, "admin");
+    setBusy(false);
+    if (ok) {
+      onChange({ ...member, role: "admin" });
+      setConfirmAdmin(false);
       setOpen(false);
     }
   };
@@ -213,6 +235,14 @@ export default function MemberActions({
           )}
         </div>
       )}
+
+      <GrantAdminDialog
+        memberName={member.username}
+        isOpen={confirmAdmin}
+        busy={busy}
+        onConfirm={confirmGrantAdmin}
+        onCancel={() => setConfirmAdmin(false)}
+      />
     </div>
   );
 }
