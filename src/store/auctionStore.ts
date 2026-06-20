@@ -27,6 +27,8 @@ import {
 } from '@/types/auction.types';
 import { supabase } from '@/lib/supabase';
 import { AuctionEngine } from '@/services/auctionEngine';
+import { EventsService } from '@/services/eventsService';
+import { AuctionEvent } from '@/types/event.types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const COUNTDOWN_DURATION = 3;
@@ -91,6 +93,9 @@ interface AuctionStoreState extends AuctionState {
   // stay visible in the admin Squad Overview even after they disconnect; only
   // non-bidders drop off when they leave. Cleared when the auction resets.
   biddersThisAuction: string[];
+  // The named event the auction room is bound to. Drives the target + reserve
+  // rules across the UI; null only before any event is created.
+  liveEvent: AuctionEvent | null;
   login: (userId: string, role: UserRole) => Promise<void>;
   logout: () => void;
   startAuction: () => Promise<void>;
@@ -121,6 +126,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   phaseEndsAt: null,
   onlineUserIds: [],
   biddersThisAuction: [],
+  liveEvent: null,
   currentHighestBid: null,
   bidHistory: [],
   resultMessage: null,
@@ -140,6 +146,8 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
 
     const users = await AuctionEngine.loadUsers(soldPlayerIds);
     const players = await AuctionEngine.loadPlayers();
+    const liveEvent = await EventsService.getLiveEvent();
+    set({ liveEvent });
 
     // Seed the persistent bidders set from existing bids, so an admin who joins
     // mid-auction also sees people who already bid and then left without winning.
@@ -210,6 +218,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       phaseEndsAt: null,
       onlineUserIds: [],
       biddersThisAuction: [],
+      liveEvent: null,
       currentHighestBid: null,
       bidHistory: [],
       resultMessage: null,
@@ -232,6 +241,14 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         async (payload) => {
           const newState = payload.new as Record<string, unknown>;
           const state = get();
+
+          // The bound event changed (created / switched / reset) — refresh the
+          // rules so target + reserve stay correct across the UI.
+          const nextEventId =
+            typeof newState.event_id === 'string' ? (newState.event_id as string) : null;
+          if (nextEventId !== (state.liveEvent?.id ?? null)) {
+            void EventsService.getLiveEvent().then((ev) => set({ liveEvent: ev }));
+          }
 
           const nextPlayerId =
             typeof newState.current_player_id === 'string'
@@ -558,12 +575,14 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
 
     const users = await AuctionEngine.loadUsers([]);
     const players = await AuctionEngine.loadPlayers();
+    const liveEvent = await EventsService.getLiveEvent();
 
     set({
       users,
       currentUserId,
       currentUserRole,
       allPlayers: players,
+      liveEvent,
       currentPlayerIndex: -1,
       currentPlayer: null,
       soldPlayers: [],

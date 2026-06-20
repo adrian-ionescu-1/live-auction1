@@ -33,8 +33,9 @@ export default function ResultsView({ onClose }: ResultsViewProps) {
             <h1 className="text-4xl sm:text-5xl font-extrabold text-zinc-100 mb-2">
               🎉 Auction Complete! 🎉
             </h1>
-            <p className="text-base sm:text-lg text-zinc-300">
-              All players have been auctioned
+            <p className="mx-auto max-w-2xl text-base sm:text-lg text-zinc-300">
+              Everyone reached their target. Any leftover players were handed out randomly
+              (free, one per member per round) per the auction rules. This event is now closed.
             </p>
           </div>
 
@@ -131,10 +132,15 @@ export default function ResultsView({ onClose }: ResultsViewProps) {
               })}
           </div>
 
-          {/* bottom hint */}
-          <p className="text-center text-zinc-500 mt-8 text-sm">
-            Waiting for the admin to start a new auction…
-          </p>
+          {/* return to dashboard */}
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={onClose}
+              className="rounded-2xl bg-emerald-500/20 px-6 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+            >
+              ← Back to dashboard
+            </button>
+          </div>
         </div>
       </div>
     </div>

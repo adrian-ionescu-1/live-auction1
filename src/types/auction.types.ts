@@ -8,6 +8,9 @@ export interface User {
   wonPlayers: WonPlayer[];
   // A banned participant can watch the auction but cannot place bids.
   banned?: boolean;
+  // Links the participant to the Discord member they were provisioned from.
+  // Null only for legacy key-based rows (cleaned up by the events migration).
+  profileId?: string | null;
 }
 
 export interface WonPlayer {
