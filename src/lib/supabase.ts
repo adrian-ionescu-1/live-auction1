@@ -3,6 +3,20 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
+// The access-key admin is anonymous to Postgres (no JWT), so the guarded admin
+// RPCs recognise them by an `x-admin-key` header carrying the key they logged in
+// with. Inject it on every request when present, so admin event RPCs (which take
+// no key argument) are authorized without threading the key through each call.
+// Harmless for everyone else: no key in storage means no header.
+const adminKeyFetch: typeof fetch = (input, init) => {
+  const headers = new Headers(init?.headers);
+  if (typeof window !== 'undefined') {
+    const key = window.sessionStorage.getItem('admin_access_key');
+    if (key) headers.set('x-admin-key', key);
+  }
+  return fetch(input, { ...init, headers });
+};
+
 // Explicit auth config so the Discord OAuth redirect is handled reliably on a
 // purely client-side app: the session token comes back in the URL and the
 // client parses + persists it. `implicit` flow avoids the PKCE code-verifier
@@ -14,6 +28,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     flowType: 'implicit',
   },
+  global: { fetch: adminKeyFetch },
 });
 
 export interface SupabaseAuthKey {
