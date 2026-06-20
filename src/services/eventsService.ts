@@ -29,6 +29,7 @@ export class EventsService {
       status: (row.status as AuctionEvent["status"]) ?? "live",
       createdAt: (row.created_at as string) ?? new Date().toISOString(),
       availableAt: (row.available_at as string) ?? null,
+      opensAt: (row.opens_at as string) ?? null,
       finishedAt: (row.finished_at as string) ?? null,
     };
   }
@@ -71,7 +72,7 @@ export class EventsService {
   static async listEventMembers(eventId: string): Promise<EventMember[]> {
     const { data, error } = await supabase
       .from("auction_event_members")
-      .select("profile_id, profiles ( username, avatar_url, role, banned )")
+      .select("profile_id, profiles ( username, display_name, avatar_url, role, banned )")
       .eq("event_id", eventId);
 
     if (error) {
@@ -81,6 +82,7 @@ export class EventsService {
 
     type ProfileJoin = {
       username: string | null;
+      display_name: string | null;
       avatar_url: string | null;
       role: string | null;
       banned: boolean | null;
@@ -95,7 +97,7 @@ export class EventsService {
       const p = Array.isArray(r.profiles) ? r.profiles[0] ?? null : r.profiles;
       return {
         profileId: r.profile_id,
-        username: p?.username ?? "guest",
+        username: p?.display_name ?? p?.username ?? "guest",
         avatarUrl: p?.avatar_url ?? null,
         role: p?.role ?? "guest",
         banned: !!p?.banned,
@@ -199,6 +201,10 @@ export class EventsService {
     extendThreshold: number;
     extendAmount: number;
     bidIncrements: number[];
+    /** ISO timestamp when bidders may enter. null = open immediately. */
+    opensAt?: string | null;
+    /** Profile ids of bidders to keep out of this event. */
+    excludedProfileIds?: string[];
   }): Promise<{ success: boolean; eventId: string | null; error: string | null }> {
     const { data, error } = await supabase.rpc("admin_create_event", {
       p_name: input.name,
@@ -209,6 +215,8 @@ export class EventsService {
       p_extend_threshold: input.extendThreshold,
       p_extend_amount: input.extendAmount,
       p_bid_increments: input.bidIncrements,
+      p_opens_at: input.opensAt ?? null,
+      p_excluded_profile_ids: input.excludedProfileIds ?? [],
     });
 
     if (error) return { success: false, eventId: null, error: error.message };
@@ -245,6 +253,16 @@ export class EventsService {
       p_event_id: eventId,
       p_profile_id: profileId,
     });
+    if (error) return { success: false, error: error.message };
+    if (data && typeof data === "object") {
+      return { success: data.success === true, error: data.error ?? null };
+    }
+    return { success: true, error: null };
+  }
+
+  /** Open the live event immediately (used to start a scheduled event early). */
+  static async openLiveEventNow(): Promise<{ success: boolean; error: string | null }> {
+    const { data, error } = await supabase.rpc("admin_open_live_event_now");
     if (error) return { success: false, error: error.message };
     if (data && typeof data === "object") {
       return { success: data.success === true, error: data.error ?? null };

@@ -42,6 +42,7 @@ export default function AdminControls() {
     status,
     soldPlayers,
     currentPlayer,
+    liveEvent,
     startAuction,
     pauseAuction,
     resumeAuction,
@@ -51,8 +52,27 @@ export default function AdminControls() {
 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [showEarlyStartConfirm, setShowEarlyStartConfirm] = useState(false);
+  const [startingEarly, setStartingEarly] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [extendError, setExtendError] = useState<string | null>(null);
+
+  // The live event is scheduled to open later: starting now would open it early.
+  const opensAtMs = liveEvent?.opensAt ? new Date(liveEvent.opensAt).getTime() : null;
+  const isScheduledEarly = opensAtMs !== null && opensAtMs > Date.now();
+
+  const handleStartClick = () => {
+    if (isScheduledEarly) setShowEarlyStartConfirm(true);
+    else void startAuction();
+  };
+
+  const handleEarlyStartConfirm = async () => {
+    setStartingEarly(true);
+    await EventsService.openLiveEventNow();
+    await startAuction();
+    setStartingEarly(false);
+    setShowEarlyStartConfirm(false);
+  };
 
   const canFinalize =
     status === 'countdown' ||
@@ -124,12 +144,20 @@ export default function AdminControls() {
         <div className="space-y-4 p-5">
           {/* ── Primary action: Start / Pause / Resume ── */}
           {status === 'idle' && (
-            <button
-              onClick={startAuction}
-              className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/25 to-emerald-400/15 py-3.5 px-6 text-sm font-extrabold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:from-emerald-500/35 hover:to-emerald-400/25 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
-            >
-              ▶ Start auction
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={handleStartClick}
+                className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/25 to-emerald-400/15 py-3.5 px-6 text-sm font-extrabold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:from-emerald-500/35 hover:to-emerald-400/25 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+              >
+                ▶ Start auction
+              </button>
+              {isScheduledEarly && opensAtMs !== null && (
+                <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-center text-[11px] text-amber-200 ring-1 ring-amber-400/20">
+                  Scheduled to open {new Date(opensAtMs).toLocaleString()}. Starting now opens it
+                  early for bidders.
+                </p>
+              )}
+            </div>
           )}
           {status === 'active' && (
             <button
@@ -195,12 +223,22 @@ export default function AdminControls() {
                 🏁 End &amp; distribute remaining
               </button>
             )}
-            <button
-              onClick={handleResetClick}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500/10 py-3 px-4 text-sm font-bold text-red-200 ring-1 ring-red-400/20 transition hover:bg-red-500/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
-            >
-              🔄 Reset auction
-            </button>
+            {/* Once the auction has finished, resetting is handled from the
+                Events page (Reopen, gated by typed-name + final confirm), so we
+                don't expose a reset button here that could wipe state by accident. */}
+            {status === 'finished' ? (
+              <p className="rounded-2xl bg-white/5 py-3 px-4 text-center text-xs text-zinc-400 ring-1 ring-white/10">
+                Auction finished. To run it again, reopen the event from{' '}
+                <span className="font-semibold text-zinc-200">Events</span>.
+              </p>
+            ) : (
+              <button
+                onClick={handleResetClick}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500/10 py-3 px-4 text-sm font-bold text-red-200 ring-1 ring-red-400/20 transition hover:bg-red-500/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+              >
+                🔄 Reset auction
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -211,6 +249,23 @@ export default function AdminControls() {
         message="Are you sure you want to restart the auction and accept the terms & conditions?"
         onConfirm={handleResetConfirm}
         onCancel={handleResetCancel}
+      />
+
+      <ConfirmDialog
+        isOpen={showEarlyStartConfirm}
+        title="Start before the scheduled time?"
+        message={
+          opensAtMs !== null
+            ? `This event is scheduled to open ${new Date(
+                opensAtMs
+              ).toLocaleString()}. Starting now opens the room early so bidders can enter right away.`
+            : "Starting now opens the room for bidders."
+        }
+        tone="primary"
+        confirmLabel="Yes, start now"
+        busy={startingEarly}
+        onConfirm={handleEarlyStartConfirm}
+        onCancel={() => setShowEarlyStartConfirm(false)}
       />
 
       <ConfirmDialog

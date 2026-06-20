@@ -7,14 +7,17 @@ interface ResultsViewProps {
 }
 
 export default function ResultsView({ onClose }: ResultsViewProps) {
-  const { users } = useAuctionStore();
+  const { users, currentUserId } = useAuctionStore();
 
-  const regularUsers = users.filter((u) => u.role === 'USER');
+  // Each member only sees their own result — not the whole field's squads.
+  const me = users.find((u) => u.id === currentUserId);
+  const wonPlayers = me?.wonPlayers ?? [];
+  const totalSpent = wonPlayers.reduce((sum, p) => sum + p.amount, 0);
 
   return (
     /* fixed overlay — same z / backdrop pattern used by ResultBanner & ConfirmDialog */
     <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className="relative max-h-[90vh] w-full max-w-4xl animate-scale-in overflow-y-auto rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm">
+      <div className="relative max-h-[90vh] w-full max-w-lg animate-scale-in overflow-y-auto rounded-3xl bg-black/35 ring-1 ring-white/10 backdrop-blur-sm">
 
         {/* close button — top-right corner */}
         <button
@@ -30,107 +33,70 @@ export default function ResultsView({ onClose }: ResultsViewProps) {
         <div className="p-6 sm:p-10">
           {/* header */}
           <div className="text-center mb-8">
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-zinc-100 mb-2">
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-zinc-100 mb-2">
               🎉 Auction Complete! 🎉
             </h1>
-            <p className="mx-auto max-w-2xl text-base sm:text-lg text-zinc-300">
-              Everyone reached their target. Any leftover players were handed out randomly
-              (free, one per member per round) per the auction rules. This event is now closed.
+            <p className="mx-auto max-w-md text-sm sm:text-base text-zinc-300">
+              The event is closed. Here&apos;s the squad you walked away with.
             </p>
           </div>
 
-          <h2 className="text-xl sm:text-2xl font-extrabold text-zinc-100 mb-6 text-center">
-            Final Results
-          </h2>
+          {/* the current member's personal card */}
+          {me ? (
+            <div className="animate-fade-up rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 shadow-[0_0_60px_rgba(16,185,129,0.12)]">
+              <h2 className="mb-4 text-center text-2xl font-extrabold text-zinc-100 truncate">
+                {me.username}
+              </h2>
 
-          {/* user cards grid — identical content as before */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {regularUsers
-              .sort((a, b) => {
-                const aSpent = a.wonPlayers.reduce((sum, p) => sum + p.amount, 0);
-                const bSpent = b.wonPlayers.reduce((sum, p) => sum + p.amount, 0);
-                return bSpent - aSpent;
-              })
-              .map((user, index) => {
-                const wonPlayers = user.wonPlayers || [];
-                const totalSpent = wonPlayers.reduce((sum, p) => sum + p.amount, 0);
-
-                const podiumGlow =
-                  index === 0
-                    ? 'shadow-[0_0_60px_rgba(16,185,129,0.14)]'
-                    : index === 1
-                    ? 'shadow-[0_0_60px_rgba(34,211,238,0.12)]'
-                    : index === 2
-                    ? 'shadow-[0_0_60px_rgba(236,72,153,0.10)]'
-                    : '';
-
-                return (
-                  <div
-                    key={user.id}
-                    style={{ animationDelay: `${Math.min(index, 8) * 70}ms` }}
-                    className={`group relative animate-fade-up rounded-3xl p-6 transition
-                      bg-white/5 ring-1 ring-white/10 hover:-translate-y-1 hover:bg-white/10 ${podiumGlow}`}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        {index === 0 && <span className="text-3xl">🥇</span>}
-                        {index === 1 && <span className="text-3xl">🥈</span>}
-                        {index === 2 && <span className="text-3xl">🥉</span>}
-                        <h3 className="text-xl sm:text-2xl font-extrabold text-zinc-100 truncate">
-                          {user.username}
-                        </h3>
-                      </div>
-
-                      <span className="shrink-0 rounded-full bg-black/30 ring-1 ring-white/10 px-3 py-1 text-[11px] text-zinc-300">
-                        #{index + 1}
-                      </span>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-zinc-400">Players Won:</span>
-                        <span className="text-xl font-extrabold text-zinc-100 tabular-nums">
-                          {wonPlayers.length}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="text-zinc-400">Total Spent:</span>
-                        <span className="text-xl font-extrabold text-red-200 tabular-nums">
-                          ${totalSpent.toLocaleString()}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="text-zinc-400">Remaining:</span>
-                        <span className="text-xl font-extrabold text-emerald-200 tabular-nums">
-                          ${user.balance.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-
-                    {wonPlayers.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-white/10">
-                        <p className="text-sm font-semibold text-zinc-300 mb-2">
-                          Squad:
-                        </p>
-
-                        <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
-                          {wonPlayers.map((p, i) => (
-                            <p key={i} className="text-sm text-zinc-300">
-                              • {p.playerName}{' '}
-                              <span className="text-zinc-500 tabular-nums">
-                                (${p.amount})
-                              </span>
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                <div className="rounded-2xl bg-black/25 px-3 py-3 text-center ring-1 ring-white/10">
+                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">Players</div>
+                  <div className="text-xl font-extrabold text-zinc-100 tabular-nums">
+                    {wonPlayers.length}
                   </div>
-                );
-              })}
-          </div>
+                </div>
+                <div className="rounded-2xl bg-black/25 px-3 py-3 text-center ring-1 ring-white/10">
+                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">Spent</div>
+                  <div className="text-xl font-extrabold text-red-200 tabular-nums">
+                    ${totalSpent.toLocaleString()}
+                  </div>
+                </div>
+                <div className="rounded-2xl bg-black/25 px-3 py-3 text-center ring-1 ring-white/10">
+                  <div className="text-[10px] uppercase tracking-wide text-zinc-500">Remaining</div>
+                  <div className="text-xl font-extrabold text-emerald-200 tabular-nums">
+                    ${me.balance.toLocaleString()}
+                  </div>
+                </div>
+              </div>
+
+              {wonPlayers.length > 0 ? (
+                <div className="mt-5 pt-5 border-t border-white/10">
+                  <p className="mb-3 text-sm font-semibold text-zinc-300">Your squad:</p>
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                    {wonPlayers.map((p, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between rounded-xl bg-black/20 px-3 py-2 ring-1 ring-white/5"
+                      >
+                        <span className="truncate text-sm text-zinc-200">{p.playerName}</span>
+                        <span className="shrink-0 text-sm text-zinc-400 tabular-nums">
+                          ${p.amount.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-5 pt-5 border-t border-white/10 text-center text-sm text-zinc-400">
+                  You didn&apos;t win any players in this auction.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-center text-sm text-zinc-400">
+              Your results aren&apos;t available.
+            </p>
+          )}
 
           {/* return to dashboard */}
           <div className="mt-8 flex justify-center">

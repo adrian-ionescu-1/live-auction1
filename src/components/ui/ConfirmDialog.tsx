@@ -6,7 +6,20 @@ interface ConfirmDialogProps {
   message: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Color of the confirm button. Defaults to the destructive red. */
+  tone?: 'danger' | 'primary';
+  /** Label of the confirm button. Defaults to "Confirm". */
+  confirmLabel?: string;
+  /** Disables the confirm button (e.g. while an async action is running). */
+  busy?: boolean;
 }
+
+const CONFIRM_TONE = {
+  danger:
+    'bg-gradient-to-r from-red-500/80 to-rose-500/80 hover:from-red-500 hover:to-rose-500 text-white focus-visible:ring-red-400/60',
+  primary:
+    'bg-gradient-to-r from-emerald-500/80 to-emerald-400/80 hover:from-emerald-500 hover:to-emerald-400 text-white focus-visible:ring-emerald-400/60',
+} as const;
 
 export default function ConfirmDialog({
   isOpen,
@@ -14,6 +27,9 @@ export default function ConfirmDialog({
   message,
   onConfirm,
   onCancel,
+  tone = 'danger',
+  confirmLabel = 'Confirm',
+  busy = false,
 }: ConfirmDialogProps) {
   if (!isOpen) {
     return null;
@@ -37,16 +53,18 @@ export default function ConfirmDialog({
         <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
           <button
             onClick={onCancel}
-            className="flex-1 rounded-xl bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-zinc-300 font-semibold py-3 px-6 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/40"
+            disabled={busy}
+            className="flex-1 rounded-xl bg-white/5 hover:bg-white/10 ring-1 ring-white/10 text-zinc-300 font-semibold py-3 px-6 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-300/40 disabled:opacity-60"
           >
             Cancel
           </button>
 
           <button
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-gradient-to-r from-red-500/80 to-rose-500/80 hover:from-red-500 hover:to-rose-500 text-white font-semibold py-3 px-6 transition shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+            disabled={busy}
+            className={`flex-1 rounded-xl font-semibold py-3 px-6 transition shadow-lg focus-visible:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${CONFIRM_TONE[tone]}`}
           >
-            Confirm
+            {busy ? 'Working…' : confirmLabel}
           </button>
         </div>
       </div>

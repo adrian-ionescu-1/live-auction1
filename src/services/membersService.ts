@@ -8,7 +8,7 @@ export class MembersService {
   static async getAllMembers(): Promise<Member[]> {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, username, avatar_url, role, banned")
+      .select("id, username, display_name, avatar_url, role, banned")
       .order("username", { ascending: true });
 
     if (error) {
@@ -20,13 +20,18 @@ export class MembersService {
       const r = row as {
         id: string;
         username: string | null;
+        display_name: string | null;
         avatar_url: string | null;
         role: string;
         banned: boolean | null;
       };
+      const original = r.username ?? "guest";
+      const displayName = r.display_name ?? null;
       return {
         id: r.id,
-        username: r.username ?? "guest",
+        username: displayName ?? original,
+        originalUsername: original,
+        displayName,
         avatarUrl: r.avatar_url,
         role: r.role,
         banned: !!r.banned,
@@ -55,6 +60,22 @@ export class MembersService {
     });
     if (error) {
       console.error("Error updating member ban state:", error);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Admin: set a member's display name, or reset it (pass null/empty) back to
+   * their original Discord name. Also syncs the live auction participant.
+   */
+  static async setName(memberId: string, name: string | null): Promise<boolean> {
+    const { error } = await supabase.rpc("admin_set_member_name", {
+      p_member_id: memberId,
+      p_name: name && name.trim() ? name.trim() : null,
+    });
+    if (error) {
+      console.error("Error updating member name:", error);
       return false;
     }
     return true;

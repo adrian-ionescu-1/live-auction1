@@ -8,7 +8,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MembersService } from "@/services/membersService";
 import { EventsService } from "@/services/eventsService";
@@ -16,7 +16,7 @@ import { AuctionEngine } from "@/services/auctionEngine";
 import { Member } from "@/types/account.types";
 import { Player } from "@/types/auction.types";
 import { useMembersPresence } from "@/app/_components/useMembersPresence";
-import EventMembersCard from "@/components/admin/EventMembersCard";
+import { AccountAvatar } from "@/app/_components/AccountMenu";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 const inputClass =
@@ -171,6 +171,104 @@ function IncrementEditor({
   );
 }
 
+// Selectable bidder access list. Every bidder is included by default; the admin
+// can exclude anyone who shouldn't take part, even though they hold the role.
+function BidderAccessSelect({
+  members,
+  onlineIds,
+  excludedIds,
+  onToggle,
+}: {
+  members: Member[];
+  onlineIds: Set<string>;
+  excludedIds: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  const includedCount = members.filter((m) => !excludedIds.has(m.id)).length;
+
+  return (
+    <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base font-extrabold text-zinc-100">Members with access</h3>
+        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-200 ring-1 ring-emerald-400/25">
+          {includedCount}/{members.length} in
+        </span>
+      </div>
+      <p className="mb-3 text-xs text-zinc-500">
+        Every bidder is enrolled automatically. Exclude anyone who shouldn&apos;t take part in
+        this event — they won&apos;t be able to enter the room.
+      </p>
+
+      {members.length === 0 ? (
+        <div className="rounded-2xl bg-black/25 p-6 text-center ring-1 ring-white/10">
+          <p className="text-sm text-zinc-400">
+            No bidders yet. Promote members to Bidder in the Members tab.
+          </p>
+        </div>
+      ) : (
+        <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
+          {members.map((m) => {
+            const excluded = excludedIds.has(m.id);
+            const online = onlineIds.has(m.id);
+            const dot = m.banned
+              ? "bg-red-500"
+              : online
+                ? "bg-emerald-400"
+                : "bg-zinc-500";
+            return (
+              <li
+                key={m.id}
+                className={`flex items-center gap-3 rounded-2xl px-3 py-2 ring-1 ${
+                  excluded ? "bg-black/20 ring-white/5" : "bg-black/25 ring-white/10"
+                }`}
+              >
+                <span className="relative shrink-0">
+                  <AccountAvatar avatarUrl={m.avatarUrl} name={m.username} size={32} />
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-zinc-950 ${dot}`}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span
+                    className={`block truncate text-sm font-semibold ${
+                      excluded ? "text-zinc-500 line-through" : "text-zinc-100"
+                    }`}
+                  >
+                    {m.username}
+                  </span>
+                  <span className="block text-[10px] uppercase tracking-wide text-zinc-500">
+                    {excluded ? "Excluded" : online ? "Online" : "Offline"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onToggle(m.id)}
+                  className={`shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold ring-1 transition ${
+                    excluded
+                      ? "bg-emerald-500/15 text-emerald-200 ring-emerald-400/25 hover:bg-emerald-500/25"
+                      : "bg-red-500/15 text-red-200 ring-red-400/25 hover:bg-red-500/25"
+                  }`}
+                >
+                  {excluded ? "Include" : "Exclude"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Smallest datetime-local the admin can pick: one minute from now, formatted for
+// the native input (local time, no seconds/timezone suffix).
+function localInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
 export default function CreateEventPage() {
   const router = useRouter();
   const onlineIds = useMembersPresence();
@@ -189,6 +287,11 @@ export default function CreateEventPage() {
   const [playerDuration, setPlayerDuration] = useState("30");
   const [extendThreshold, setExtendThreshold] = useState("10");
   const [extendAmount, setExtendAmount] = useState("5");
+  // 6. Opening time — "now" (open immediately) or a scheduled local date+time.
+  const [openMode, setOpenMode] = useState<"now" | "schedule">("now");
+  const [opensAtLocal, setOpensAtLocal] = useState("");
+  // 7. Member access — bidders excluded from this event (kept out even with role).
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
 
   const [bidders, setBidders] = useState<Member[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -234,23 +337,32 @@ export default function CreateEventPage() {
   const thresholdNum = Math.max(0, Math.floor(Number(extendThreshold) || 0));
   const extendNum = Math.max(0, Math.floor(Number(extendAmount) || 0));
 
+  // Opening time: "now" sends null (open immediately); "schedule" must be a
+  // valid future instant, converted to an ISO string for the server.
+  const scheduledMs = opensAtLocal ? new Date(opensAtLocal).getTime() : NaN;
+  const scheduleValid =
+    openMode === "now" || (!Number.isNaN(scheduledMs) && scheduledMs > Date.now());
+  const opensAtIso =
+    openMode === "schedule" && !Number.isNaN(scheduledMs)
+      ? new Date(scheduledMs).toISOString()
+      : null;
+
   const nameValid = name.trim().length > 0;
   const limitValid = limitNum >= 1;
   const incrementsValid = bidIncrements.length > 0;
   const budgetValid = budgetNum >= totalReserve;
   const canSubmit =
-    nameValid && limitValid && incrementsValid && budgetValid && !submitting;
+    nameValid && limitValid && incrementsValid && budgetValid && scheduleValid && !submitting;
 
-  const accessMembers = useMemo(
-    () =>
-      bidders.map((m) => ({
-        id: m.id,
-        username: m.username,
-        avatarUrl: m.avatarUrl,
-        banned: m.banned,
-      })),
-    [bidders]
-  );
+  const enrolledCount = bidders.filter((m) => !excludedIds.has(m.id)).length;
+
+  const toggleExcluded = (id: string) =>
+    setExcludedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const handleCreate = async () => {
     setSubmitting(true);
@@ -264,6 +376,8 @@ export default function CreateEventPage() {
       extendThreshold: thresholdNum,
       extendAmount: extendNum,
       bidIncrements,
+      opensAt: opensAtIso,
+      excludedProfileIds: Array.from(excludedIds),
     });
     setConfirmOpen(false);
     if (res.success) {
@@ -482,6 +596,70 @@ export default function CreateEventPage() {
             </p>
           </Section>
 
+          {/* 6. Opening time */}
+          <Section
+            step={6}
+            title="Opening time"
+            desc="When bidders can enter the room. Open now, or schedule it for later."
+          >
+            <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
+              <button
+                type="button"
+                onClick={() => setOpenMode("now")}
+                className={`rounded-xl px-4 py-2.5 text-sm font-bold ring-1 transition ${
+                  openMode === "now"
+                    ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                    : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                }`}
+              >
+                Open now
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenMode("schedule");
+                  if (!opensAtLocal) {
+                    setOpensAtLocal(localInputValue(new Date(Date.now() + 60 * 60 * 1000)));
+                  }
+                }}
+                className={`rounded-xl px-4 py-2.5 text-sm font-bold ring-1 transition ${
+                  openMode === "schedule"
+                    ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                    : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                }`}
+              >
+                Schedule
+              </button>
+            </div>
+
+            {openMode === "schedule" && (
+              <div className="mt-4">
+                <Field label="Opens at" hint="Your local date and time.">
+                  <input
+                    type="datetime-local"
+                    className={`${inputClass} sm:max-w-sm`}
+                    value={opensAtLocal}
+                    min={localInputValue(new Date())}
+                    onChange={(e) => setOpensAtLocal(e.target.value)}
+                  />
+                </Field>
+                {!scheduleValid && (
+                  <p className="mt-2 text-xs font-semibold text-amber-200">
+                    Pick a date and time in the future.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <p className="mt-4 rounded-xl bg-black/25 px-3 py-2 text-xs text-zinc-400 ring-1 ring-white/10">
+              {openMode === "now"
+                ? "Bidders can enter as soon as the event is created."
+                : scheduleValid
+                  ? "Until then, bidders see a countdown on their dashboard and can't enter."
+                  : "Choose a valid future time to schedule the opening."}
+            </p>
+          </Section>
+
           {error && <p className="text-sm font-semibold text-red-200">{error}</p>}
 
           <button
@@ -495,12 +673,11 @@ export default function CreateEventPage() {
 
         {/* Right column: members + players */}
         <div className="space-y-6 lg:col-span-1">
-          <EventMembersCard
-            title="Members with access"
-            subtitle="Everyone with the Bidder role is enrolled automatically when you create the event."
-            members={accessMembers}
+          <BidderAccessSelect
+            members={bidders}
             onlineIds={onlineIds}
-            emptyHint="No bidders yet. Promote members to Bidder in the Members tab."
+            excludedIds={excludedIds}
+            onToggle={toggleExcluded}
           />
 
           <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
@@ -543,7 +720,13 @@ export default function CreateEventPage() {
       <ConfirmDialog
         isOpen={confirmOpen}
         title="Create this event?"
-        message={`"${name.trim()}" — ${limitNum} players/member, opening $${openingNum.toLocaleString()}, reserve $${totalReserve.toLocaleString()}, budget $${budgetNum.toLocaleString()} each. ${durationNum}s per player. ${accessMembers.length} member(s) enrolled. This becomes the live event.`}
+        message={`"${name.trim()}" — ${limitNum} players/member, opening $${openingNum.toLocaleString()}, reserve $${totalReserve.toLocaleString()}, budget $${budgetNum.toLocaleString()} each. ${durationNum}s per player. ${enrolledCount} member(s) enrolled${
+          excludedIds.size > 0 ? `, ${excludedIds.size} excluded` : ""
+        }. ${
+          opensAtIso
+            ? `Opens ${new Date(opensAtIso).toLocaleString()}.`
+            : "Opens immediately."
+        } This becomes the live event.`}
         onConfirm={handleCreate}
         onCancel={() => setConfirmOpen(false)}
       />

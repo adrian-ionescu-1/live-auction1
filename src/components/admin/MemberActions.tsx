@@ -22,7 +22,13 @@ export default function MemberActions({
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [nameInput, setNameInput] = useState(member.username);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Reset the editable name to the current one each time the popover opens.
+  useEffect(() => {
+    if (open) setNameInput(member.username);
+  }, [open, member.username]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +70,35 @@ export default function MemberActions({
     }
   };
 
+  const saveName = async () => {
+    const next = nameInput.trim();
+    if (!next || next === member.username) {
+      setOpen(false);
+      return;
+    }
+    setBusy(true);
+    const ok = await MembersService.setName(member.id, next);
+    setBusy(false);
+    if (ok) {
+      onChange({ ...member, displayName: next, username: next });
+      setOpen(false);
+    }
+  };
+
+  const resetName = async () => {
+    setBusy(true);
+    const ok = await MembersService.setName(member.id, null);
+    setBusy(false);
+    if (ok) {
+      onChange({
+        ...member,
+        displayName: null,
+        username: member.originalUsername,
+      });
+      setOpen(false);
+    }
+  };
+
   const showRoles = mode === "roles" || mode === "all";
   const showBan = mode === "ban" || mode === "all";
 
@@ -82,8 +117,55 @@ export default function MemberActions({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1 w-56 origin-top-right animate-scale-in overflow-hidden rounded-2xl bg-zinc-900/95 ring-1 ring-white/10 shadow-2xl backdrop-blur"
+          className="absolute right-0 z-50 mt-1 w-64 origin-top-right animate-scale-in overflow-hidden rounded-2xl bg-zinc-900/95 ring-1 ring-white/10 shadow-2xl backdrop-blur"
         >
+          {/* Display name: rename or reset to the original Discord name. */}
+          <div className={`p-1.5 ${showRoles || showBan ? "border-b border-white/10" : ""}`}>
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">
+              Display name
+            </div>
+            <input
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void saveName();
+                }
+              }}
+              placeholder={member.originalUsername}
+              maxLength={40}
+              disabled={busy}
+              className="mb-1.5 w-full rounded-xl bg-black/40 px-3 py-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40 disabled:opacity-60"
+            />
+            <button
+              type="button"
+              role="menuitem"
+              disabled={busy || !nameInput.trim() || nameInput.trim() === member.username}
+              onClick={saveName}
+              className="w-full rounded-xl bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Save name
+            </button>
+            {member.displayName && (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={busy}
+                  onClick={resetName}
+                  className="mt-1.5 w-full truncate rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10 disabled:opacity-50"
+                >
+                  Reset to “{member.originalUsername}”
+                </button>
+                <p className="mt-1.5 px-1 text-[10px] text-zinc-500">
+                  Original name:{" "}
+                  <span className="text-zinc-300">{member.originalUsername}</span>
+                </p>
+              </>
+            )}
+          </div>
+
           {showRoles && (
             <div className="p-1.5">
               <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">

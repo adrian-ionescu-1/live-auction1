@@ -41,6 +41,8 @@ export interface SupabaseProfile {
   id: string;
   discord_id: string | null;
   username: string | null;
+  /** Admin-set display name override; null = use username. */
+  display_name: string | null;
   avatar_url: string | null;
   role: string;
   banned: boolean;
