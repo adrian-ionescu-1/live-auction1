@@ -48,13 +48,17 @@ export default function AdminMembersPage() {
       return a.localeCompare(b);
     });
     return keys.map((key) => {
+      // Within each role: online first, then offline, then banned — so the
+      // "online up top" ordering stays clean (a banned member never leads the
+      // group even if their tab is open). Ties break alphabetically.
+      const rank = (m: Member) => (m.banned ? 2 : onlineIds.has(m.id) ? 0 : 1);
       const list = byRole
         .get(key)!
         .slice()
         .sort((a, b) => {
-          const oa = onlineIds.has(a.id) ? 0 : 1;
-          const ob = onlineIds.has(b.id) ? 0 : 1;
-          if (oa !== ob) return oa - ob;
+          const ra = rank(a);
+          const rb = rank(b);
+          if (ra !== rb) return ra - rb;
           return a.username.localeCompare(b.username);
         });
       return { key, members: list };
