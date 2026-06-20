@@ -1,13 +1,18 @@
 // Admin section shell: a single client-side role gate + the shared nav for
 // every /admin page. Consistent with the rest of the app, the gate is
-// client-side (the auction itself stays server-authoritative). Only the
-// access-key ADMIN may view these pages.
+// client-side (the auction itself stays server-authoritative).
+//
+// Two kinds of account may view these pages:
+//   1. The access-key ADMIN (their session role is set at key login).
+//   2. A Discord account an admin has promoted to the 'admin' role — this is
+//      how admin rights are handed to a normal signed-in member.
 
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AdminNav from "@/components/admin/AdminNav";
+import { AccountService } from "@/services/accountService";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -15,12 +20,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const role = sessionStorage.getItem("auction_user_role");
-    if (role !== "ADMIN") {
-      router.replace("/login");
-      return;
-    }
-    setAllowed(true);
+    let cancelled = false;
+
+    const check = async () => {
+      // 1. Access-key admin: their role is stored synchronously at key login.
+      if (sessionStorage.getItem("auction_user_role") === "ADMIN") {
+        if (!cancelled) setAllowed(true);
+        return;
+      }
+      // 2. Discord account promoted to the 'admin' role. Read the live profile
+      //    (not the cached account chip) so someone whose admin role was just
+      //    revoked can't keep access from a stale cache.
+      const profile = await AccountService.getMyProfile();
+      if (cancelled) return;
+      if (profile && profile.role.toLowerCase() === "admin") {
+        setAllowed(true);
+      } else {
+        router.replace("/login");
+      }
+    };
+
+    void check();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   if (!allowed) return null;

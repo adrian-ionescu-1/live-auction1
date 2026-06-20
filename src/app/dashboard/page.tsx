@@ -16,10 +16,16 @@ import { AccountService } from "@/services/accountService";
 import { AuctionEngine } from "@/services/auctionEngine";
 import { EventsService } from "@/services/eventsService";
 import { supabase } from "@/lib/supabase";
-import { Profile, DEFAULT_ACCOUNT_ROLE, BIDDER_ROLE } from "@/types/account.types";
+import {
+  Profile,
+  DEFAULT_ACCOUNT_ROLE,
+  BIDDER_ROLE,
+  EXCLUDED_ROLE,
+} from "@/types/account.types";
 import { AuctionEvent, MyEventResults } from "@/types/event.types";
 import { GradientCard } from "@/app/_components/ui";
 import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
+import ExcludedScreen from "@/app/_components/ExcludedScreen";
 import Logo from "@/app/_components/Logo";
 
 type RoleStyle = { label: string; chip: string };
@@ -177,9 +183,16 @@ export default function DashboardPage() {
     );
   }
 
+  // Excluded members never see the dashboard: a full-screen lock replaces it,
+  // re-applied on every load while the role stays. Check before anything else.
+  if (profile.role.toLowerCase() === EXCLUDED_ROLE) {
+    return <ExcludedScreen />;
+  }
+
   const role = roleStyle(profile.role);
   const isGuest = profile.role.toLowerCase() === DEFAULT_ACCOUNT_ROLE;
   const isBidder = profile.role.toLowerCase() === BIDDER_ROLE;
+  const isAdmin = profile.role.toLowerCase() === "admin";
   const memberSince = new Date(profile.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
@@ -223,6 +236,31 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Admin: shortcut into the admin control center. */}
+        {isAdmin && (
+          <div className="mt-8 animate-fade-up rounded-2xl bg-fuchsia-400/10 p-5 ring-1 ring-fuchsia-400/25 sm:mt-10">
+            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-fuchsia-200/80">
+                  Admin access
+                </p>
+                <p className="text-lg font-extrabold text-fuchsia-100">
+                  You have admin rights
+                </p>
+                <p className="mt-1 text-xs text-fuchsia-200/80">
+                  Manage members, roles, events and the live auction room.
+                </p>
+              </div>
+              <Link
+                href="/admin"
+                className="w-full shrink-0 rounded-2xl bg-fuchsia-500/20 px-6 py-3 text-center text-sm font-bold text-fuchsia-100 ring-1 ring-fuchsia-400/30 transition hover:bg-fuchsia-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60 sm:w-auto"
+              >
+                Open admin dashboard →
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Bidder: enter the live auction (only once the event has opened) */}
         {isBidder &&

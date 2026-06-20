@@ -1,5 +1,14 @@
 import { supabase } from "@/lib/supabase";
 import { Member } from "@/types/account.types";
+import { ADMIN_KEY_STORAGE } from "@/services/authService";
+
+// The access-key admin's key (if they logged in with one). Discord admins return
+// null here and are authorized by their JWT instead. Sent to the guarded RPCs as
+// p_admin_key so the server can verify the caller is really an admin.
+function adminKey(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem(ADMIN_KEY_STORAGE);
+}
 
 // Reads the member directory (Discord accounts) for the admin views. Reads are
 // allowed by the profiles_select_all policy; we only select non-sensitive
@@ -44,6 +53,7 @@ export class MembersService {
     const { error } = await supabase.rpc("admin_set_member_role", {
       p_member_id: memberId,
       p_role: role,
+      p_admin_key: adminKey(),
     });
     if (error) {
       console.error("Error updating member role:", error);
@@ -57,6 +67,7 @@ export class MembersService {
     const { error } = await supabase.rpc("admin_set_member_banned", {
       p_member_id: memberId,
       p_banned: banned,
+      p_admin_key: adminKey(),
     });
     if (error) {
       console.error("Error updating member ban state:", error);
@@ -73,6 +84,7 @@ export class MembersService {
     const { error } = await supabase.rpc("admin_set_member_name", {
       p_member_id: memberId,
       p_name: name && name.trim() ? name.trim() : null,
+      p_admin_key: adminKey(),
     });
     if (error) {
       console.error("Error updating member name:", error);

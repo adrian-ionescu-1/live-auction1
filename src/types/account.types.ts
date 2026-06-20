@@ -22,6 +22,13 @@ export const DEFAULT_ACCOUNT_ROLE = "guest";
 /** The role an admin grants to let a member bid in auctions. */
 export const BIDDER_ROLE = "bidder";
 
+/**
+ * A member an admin has barred from the site (broke the rules / terms). They can
+ * still sign in, but their dashboard is replaced by a full-screen exclusion
+ * notice and they can't bid or reach any admin area.
+ */
+export const EXCLUDED_ROLE = "excluded";
+
 /** A community member (Discord account) as seen in the admin directory. */
 export interface Member {
   id: string;

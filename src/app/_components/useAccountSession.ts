@@ -33,6 +33,17 @@ export type AccountSession = {
   avatarUrl: string | null;
 };
 
+// Single definition of "is this session an admin?", shared by the account menu
+// and anything else that needs it. Two paths grant admin rights:
+//   * key login    -> the access-key admin (role stored as "ADMIN").
+//   * Discord login -> a member an admin promoted to the 'admin' role.
+export function isAdminSession(session: AccountSession | null): boolean {
+  if (!session) return false;
+  return session.kind === "key"
+    ? session.role === "ADMIN"
+    : session.role.toLowerCase() === "admin";
+}
+
 function capitalize(value: string) {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 }
@@ -141,6 +152,7 @@ export function useAccountSession() {
       sessionStorage.removeItem("auction_user_id");
       sessionStorage.removeItem("auction_user_role");
       sessionStorage.removeItem("auction_user_name");
+      sessionStorage.removeItem("admin_access_key");
       Object.values(ACCOUNT_CACHE).forEach((k) => sessionStorage.removeItem(k));
       if (session?.kind === "discord") {
         await AccountService.signOut();
@@ -172,6 +184,7 @@ export function useAccountSession() {
   return {
     mounted,
     session,
+    isAdmin: isAdminSession(session),
     roleLabel,
     displayName,
     initials,
