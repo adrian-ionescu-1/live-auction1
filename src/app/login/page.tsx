@@ -13,6 +13,7 @@ import BidHistory from "@/components/auction/BidHistory";
 import ResultBanner from "@/components/auction/ResultBanner";
 import AdminUserCards from "@/components/auction/AdminUserCards";
 import ResultsView from "@/components/auction/ResultsView";
+import AccountMenu from "@/app/_components/AccountMenu";
 
 export default function AuctionRoomPage() {
   const { currentUserId, currentUserRole, users, status, login, dismissResults } =
@@ -31,6 +32,9 @@ export default function AuctionRoomPage() {
     } else {
       sessionStorage.removeItem("auction_user_name");
     }
+    // Tell the shared account card to re-read (same-tab writes don't fire the
+    // native "storage" event).
+    window.dispatchEvent(new Event("account-session"));
   }, [currentUserId, users]);
 
   useEffect(() => {
@@ -57,7 +61,8 @@ export default function AuctionRoomPage() {
     return null;
   }
 
-  // Back button (UI only) – shown on login + app + results
+  // Back button (UI only) – shown on the pre-login screen, where there is no
+  // account card yet.
   const BackToHome = () => (
     <div className="fixed left-3 top-3 z-50 sm:left-4 sm:top-4">
       <Link
@@ -71,6 +76,15 @@ export default function AuctionRoomPage() {
           <span className="sm:hidden">Home</span>
         </span>
       </Link>
+    </div>
+  );
+
+  // Account card (UI only) – shown once signed in, replacing the back button.
+  // Gives key participants (admin / user / spectator) the same identity + Home
+  // + Log out card used everywhere else.
+  const AccountTopBar = () => (
+    <div className="fixed right-3 top-3 z-50 sm:right-4 sm:top-4">
+      <AccountMenu loggedOutCta={false} />
     </div>
   );
 
@@ -90,7 +104,7 @@ export default function AuctionRoomPage() {
   if (status === "finished" && currentUserRole !== "ADMIN") {
     return (
       <>
-        <BackToHome />
+        <AccountTopBar />
         <ResultsView onClose={handleCloseResults} />
       </>
     );
@@ -98,7 +112,7 @@ export default function AuctionRoomPage() {
 
   return (
     <main className="relative min-h-screen px-3 pb-10 pt-16 sm:px-4 sm:py-8">
-      <BackToHome />
+      <AccountTopBar />
 
       {/* subtle overlay to keep readability over the global background */}
       <div className="mx-auto max-w-7xl animate-fade-up rounded-3xl bg-black/30 p-4 ring-1 ring-white/10 backdrop-blur-sm sm:p-8">
@@ -111,14 +125,7 @@ export default function AuctionRoomPage() {
           </h1>
           <p className="text-sm font-semibold text-zinc-400">
             Built by{" "}
-            <a
-              href="https://the-adrian-one.vercel.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-emerald-300 underline-offset-4 transition hover:text-emerald-200 hover:underline"
-            >
-              The Adrian One
-            </a>{" "}
+            <span className="text-emerald-300">The Adrian One</span>{" "}
             — Full-Stack Developer
           </p>
         </div>
