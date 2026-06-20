@@ -49,6 +49,42 @@ export default function TournamentsPage() {
                   Spectator info <span aria-hidden>→</span>
                 </GlowLink>
               </div>
+
+              {/* How a draft runs — fills the column next to the tall card */}
+              <div className="mt-8">
+                <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">
+                  How a draft runs
+                </div>
+                <ol className="mt-4 space-y-3">
+                  {[
+                    {
+                      t: "Organizer sets the rules",
+                      d: "Pick the budget, team count and pick caps, then generate the access keys.",
+                    },
+                    {
+                      t: "Participants join live",
+                      d: "Each team enters with a key and lands in the same real-time auction room.",
+                    },
+                    {
+                      t: "Bid, win, build a squad",
+                      d: "Players are auctioned one-by-one until every roster is complete.",
+                    },
+                  ].map((x, i) => (
+                    <li
+                      key={x.t}
+                      className="flex gap-3 rounded-2xl bg-white/5 p-4 ring-1 ring-white/10 transition hover:bg-white/10"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400/25 to-cyan-400/25 text-sm font-extrabold text-emerald-200 ring-1 ring-white/10">
+                        {i + 1}
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold">{x.t}</div>
+                        <div className="mt-1 text-sm text-zinc-400">{x.d}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
             </div>
 
             {/* Highlight Card */}

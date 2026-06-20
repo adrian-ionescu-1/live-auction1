@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import SiteBackground from "./_components/SiteBackground";
+import Logo from "./_components/Logo";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -24,10 +25,7 @@ function SiteFooter() {
           {/* Brand */}
           <div>
             <Link href="/" className="inline-flex items-center gap-3">
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400/25 to-cyan-400/25 ring-1 ring-white/10">
-                <span className="text-sm font-extrabold tracking-wider">WOT</span>
-                <span className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full bg-emerald-400/70 blur-[2px]" />
-              </div>
+              <Logo className="h-10 w-10" />
               <div className="leading-tight">
                 <div className="text-sm font-semibold tracking-wide text-zinc-100">
                   Auction App
@@ -47,6 +45,7 @@ function SiteFooter() {
             <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Explore</div>
             <ul className="mt-4 space-y-2 text-sm">
               {[
+                { href: "/", label: "Home" },
                 { href: "/tournaments", label: "Tournaments" },
                 { href: "/rules", label: "Rules" },
                 { href: "/faq", label: "FAQ" },
@@ -72,12 +71,7 @@ function SiteFooter() {
             <ul className="mt-4 space-y-2 text-sm">
               <li>
                 <Link href="/login" className="text-zinc-400 transition hover:text-zinc-100">
-                  Participant login
-                </Link>
-              </li>
-              <li>
-                <Link href="/login" className="text-zinc-400 transition hover:text-zinc-100">
-                  Enter with access key
+                  Sign in
                 </Link>
               </li>
               <li>
@@ -94,14 +88,7 @@ function SiteFooter() {
 
           <span className="text-zinc-400">
             Built by{" "}
-            <a
-              href="https://the-adrian-one.vercel.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-emerald-300 underline-offset-4 transition hover:text-emerald-200 hover:underline"
-            >
-              The Adrian One
-            </a>{" "}
+            <span className="font-medium text-emerald-300">The Adrian One</span>{" "}
             — Full-Stack Developer
           </span>
         </div>
