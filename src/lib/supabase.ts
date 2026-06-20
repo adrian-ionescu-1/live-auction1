@@ -43,6 +43,7 @@ export interface SupabaseProfile {
   username: string | null;
   avatar_url: string | null;
   role: string;
+  banned: boolean;
   created_at: string;
   updated_at: string;
 }

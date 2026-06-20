@@ -6,6 +6,8 @@ export interface User {
   balance: number;
   role: UserRole;
   wonPlayers: WonPlayer[];
+  // A banned participant can watch the auction but cannot place bids.
+  banned?: boolean;
 }
 
 export interface WonPlayer {

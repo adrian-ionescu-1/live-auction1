@@ -26,6 +26,7 @@ function DiscordIcon({ className }: { className?: string }) {
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
   const [key, setKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
   const [loading, setLoading] = useState(false);
   const [discordLoading, setDiscordLoading] = useState(false);
   const [error, setError] = useState('');
@@ -84,11 +85,11 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             </span>
           </h1>
           <p className="text-sm text-zinc-300 sm:text-base">
-            Create an account with Discord, or enter with an access key
+            Sign in with Discord to get started
           </p>
         </div>
 
-        {/* Account sign-in (Discord) */}
+        {/* Account sign-in (Discord) — the primary way in */}
         <button
           onClick={handleDiscord}
           disabled={busy}
@@ -105,66 +106,72 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           Creates your account automatically — no username or password needed.
         </p>
 
-        {/* Divider */}
-        <div className="my-6 flex items-center gap-3">
-          <span className="h-px flex-1 bg-white/10" />
-          <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-            or use an access key
-          </span>
-          <span className="h-px flex-1 bg-white/10" />
-        </div>
-
-        {/* Access key login */}
-        <div className="space-y-4">
-          <div>
-            <label
-              htmlFor="access-key"
-              className="block text-sm font-medium text-zinc-300 mb-2"
-            >
-              Access Key
-            </label>
-            <input
-              id="access-key"
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Enter your key"
-              disabled={busy}
-              autoComplete="off"
-              className="w-full rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3
-                         text-zinc-100 placeholder:text-zinc-500
-                         focus:outline-none focus:ring-2 focus:ring-emerald-400/35
-                         disabled:opacity-60 disabled:cursor-not-allowed text-lg"
-            />
+        {/* Shared error (Discord or access key) */}
+        {error && (
+          <div className="mt-4 rounded-2xl bg-red-500/10 ring-1 ring-red-400/25 p-3">
+            <p className="text-sm text-red-200 text-center font-semibold">{error}</p>
           </div>
+        )}
 
-          {error && (
-            <div className="rounded-2xl bg-red-500/10 ring-1 ring-red-400/25 p-3">
-              <p className="text-sm text-red-200 text-center font-semibold">
-                {error}
-              </p>
-            </div>
-          )}
-
+        {/* Access key — secondary, kept for special cases only */}
+        {!showKey ? (
           <button
-            onClick={handleConnect}
-            disabled={busy || !key.trim()}
-            className="w-full rounded-2xl py-4 px-6 text-lg font-bold transition
-                       text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/20
-                       ring-1 ring-emerald-400/25 active:scale-[0.98]
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60
-                       disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+            onClick={() => setShowKey(true)}
+            className="mx-auto mt-6 block text-xs font-semibold text-zinc-400 underline-offset-4 transition hover:text-zinc-200 hover:underline"
           >
-            {loading ? 'Connecting...' : 'Connect'}
+            Have an access key?
           </button>
-        </div>
+        ) : (
+          <div className="mt-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/10" />
+              <span className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                access key
+              </span>
+              <span className="h-px flex-1 bg-white/10" />
+            </div>
 
-        <div className="mt-6 rounded-2xl bg-black/30 ring-1 ring-white/10 p-4">
-          <p className="text-xs text-zinc-400 text-center">
-            If you don&apos;t have a key, please contact the auction administrator.
-          </p>
-        </div>
+            <div>
+              <label
+                htmlFor="access-key"
+                className="block text-sm font-medium text-zinc-300 mb-2"
+              >
+                Access Key
+              </label>
+              <input
+                id="access-key"
+                type="text"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter your key"
+                disabled={busy}
+                autoComplete="off"
+                className="w-full rounded-2xl bg-white/5 ring-1 ring-white/10 px-4 py-3
+                           text-zinc-100 placeholder:text-zinc-500
+                           focus:outline-none focus:ring-2 focus:ring-emerald-400/35
+                           disabled:opacity-60 disabled:cursor-not-allowed text-lg"
+              />
+            </div>
+
+            <button
+              onClick={handleConnect}
+              disabled={busy || !key.trim()}
+              className="w-full rounded-2xl py-4 px-6 text-lg font-bold transition
+                         text-emerald-200 bg-emerald-500/15 hover:bg-emerald-500/20
+                         ring-1 ring-emerald-400/25 active:scale-[0.98]
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Connecting...' : 'Connect'}
+            </button>
+
+            <p className="text-center text-xs text-zinc-500">
+              Access keys are issued by the admin for special cases.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

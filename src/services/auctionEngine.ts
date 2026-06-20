@@ -84,11 +84,66 @@ export class AuctionEngine {
         balance: u.balance,
         role: u.role,
         wonPlayers: userWonPlayersMap[u.id] || [],
+        banned: !!u.banned,
       }));
     } catch (error) {
       console.error('Error in loadUsers:', error);
       return [];
     }
+  }
+
+  /**
+   * RPC: a signed-in Discord member with the 'bidder' role joins the auction.
+   * Returns the participant (users) id to log in with. Budget starts at 0 — the
+   * admin sets it.
+   */
+  static async enterAuctionAsMember(): Promise<{
+    success: boolean;
+    userId: string | null;
+    error: string | null;
+  }> {
+    try {
+      const { data, error } = await supabase.rpc('enter_auction_as_member');
+      if (error) {
+        return { success: false, userId: null, error: error.message };
+      }
+      if (data && typeof data === 'object') {
+        return {
+          success: data.success === true,
+          userId: data.user_id ?? null,
+          error: data.error ?? null,
+        };
+      }
+      return { success: false, userId: null, error: 'Unexpected response' };
+    } catch (error: any) {
+      return { success: false, userId: null, error: error.message ?? 'Failed to join' };
+    }
+  }
+
+  /** Admin: ban / unban an auction participant. */
+  static async setParticipantBanned(userId: string, banned: boolean): Promise<boolean> {
+    const { error } = await supabase.rpc('admin_set_user_banned', {
+      p_user_id: userId,
+      p_banned: banned,
+    });
+    if (error) {
+      console.error('Error setting participant ban:', error);
+      return false;
+    }
+    return true;
+  }
+
+  /** Admin: set an auction participant's budget. */
+  static async setParticipantBalance(userId: string, balance: number): Promise<boolean> {
+    const { error } = await supabase.rpc('admin_set_user_balance', {
+      p_user_id: userId,
+      p_balance: Math.max(0, Math.round(balance)),
+    });
+    if (error) {
+      console.error('Error setting participant balance:', error);
+      return false;
+    }
+    return true;
   }
 
   static async updateUserBalance(userId: string, newBalance: number): Promise<boolean> {

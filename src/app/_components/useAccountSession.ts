@@ -157,11 +157,14 @@ export function useAccountSession() {
   const displayName = session?.name?.trim() || roleLabel || "Account";
   const initials = initialsFrom(session?.name?.trim() || roleLabel || "U");
 
-  // Discord accounts get their dashboard; key participants get the auction room.
+  // Discord accounts get their dashboard; the key admin gets the admin control
+  // center; other key participants get the auction room.
   const primaryAction =
     session?.kind === "discord"
       ? { href: "/dashboard", label: "Dashboard" }
-      : { href: "/login", label: "Go to the auction" };
+      : session?.role === "ADMIN"
+        ? { href: "/admin", label: "Admin dashboard" }
+        : { href: "/login", label: "Go to the auction" };
 
   return {
     mounted,

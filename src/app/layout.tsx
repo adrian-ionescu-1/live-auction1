@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import SiteBackground from "./_components/SiteBackground";
 import Logo from "./_components/Logo";
+import AccountPresence from "./_components/AccountPresence";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -110,6 +111,7 @@ export default function RootLayout({
           <div className="flex-1">{children}</div>
           <SiteFooter />
         </div>
+        <AccountPresence />
         <Analytics />
         <SpeedInsights />
       </body>

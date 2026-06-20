@@ -117,6 +117,7 @@ export class AuthService {
         balance: data.balance,
         role: data.role as UserRole,
         wonPlayers: [],
+        banned: !!data.banned,
       };
     } catch (error) {
       console.error('Error fetching user:', error);

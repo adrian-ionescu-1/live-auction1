@@ -87,6 +87,10 @@ interface AuctionStoreState extends AuctionState {
   // IDs of users currently connected (Realtime presence). Drives the admin's
   // live "who's online" view.
   onlineUserIds: string[];
+  // IDs of users who have placed at least one bid in the current auction. They
+  // stay visible in the admin Squad Overview even after they disconnect; only
+  // non-bidders drop off when they leave. Cleared when the auction resets.
+  biddersThisAuction: string[];
   login: (userId: string, role: UserRole) => Promise<void>;
   logout: () => void;
   startAuction: () => Promise<void>;
@@ -116,6 +120,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   timeRemaining: AUCTION_DURATION,
   phaseEndsAt: null,
   onlineUserIds: [],
+  biddersThisAuction: [],
   currentHighestBid: null,
   bidHistory: [],
   resultMessage: null,
@@ -136,6 +141,18 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
     const users = await AuctionEngine.loadUsers(soldPlayerIds);
     const players = await AuctionEngine.loadPlayers();
 
+    // Seed the persistent bidders set from existing bids, so an admin who joins
+    // mid-auction also sees people who already bid and then left without winning.
+    let biddersThisAuction: string[] = [];
+    {
+      const { data: bidRows } = await supabase.from('bids').select('user_id');
+      if (bidRows) {
+        biddersThisAuction = Array.from(
+          new Set(bidRows.map((b) => (b as { user_id: string }).user_id))
+        );
+      }
+    }
+
     if (auctionState) {
       let currentPlayer: Player | null = null;
       if (auctionState.current_player_id) {
@@ -145,6 +162,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       set({
         users,
         allPlayers: players,
+        biddersThisAuction,
         currentPlayerIndex: auctionState.current_player_index ?? -1,
         currentPlayer,
         soldPlayers: auctionState.sold_players ?? [],
@@ -165,7 +183,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
         roundCurrentIndex: auctionState.round_current_index ?? 0,
       });
     } else {
-      set({ users, allPlayers: players });
+      set({ users, allPlayers: players, biddersThisAuction });
     }
 
     get().initializeRealtime();
@@ -191,6 +209,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       timeRemaining: AUCTION_DURATION,
       phaseEndsAt: null,
       onlineUserIds: [],
+      biddersThisAuction: [],
       currentHighestBid: null,
       bidHistory: [],
       resultMessage: null,
@@ -288,6 +307,10 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
             // bids are driven by bidsChannel
             bidHistory: shouldClearBids ? [] : s.bidHistory,
             currentHighestBid: shouldClearBids ? null : s.currentHighestBid,
+
+            // A reset takes the auction back to idle — forget this round's bidders.
+            biddersThisAuction:
+              nextStatus === 'idle' ? [] : s.biddersThisAuction,
           }));
         }
       )
@@ -327,6 +350,11 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                 ? bid
                 : s.currentHighestBid,
             bidHistory: [...s.bidHistory, bid],
+            // Remember everyone who has bid this auction so they persist in the
+            // admin Squad Overview even after disconnecting.
+            biddersThisAuction: s.biddersThisAuction.includes(bid.userId)
+              ? s.biddersThisAuction
+              : [...s.biddersThisAuction, bid.userId],
           }));
         }
       )
@@ -348,6 +376,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                     username: updatedUser.username as string,
                     balance: updatedUser.balance as number,
                     role: updatedUser.role as UserRole,
+                    banned: !!updatedUser.banned,
                     // keep wonPlayers; playersChannel recomputes it
                     wonPlayers: u.wonPlayers,
                   }
@@ -545,6 +574,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
       phaseEndsAt: null,
       currentHighestBid: null,
       bidHistory: [],
+      biddersThisAuction: [],
       resultMessage: null,
       currentRound: 1,
       roundTotalPlayers: 0,
