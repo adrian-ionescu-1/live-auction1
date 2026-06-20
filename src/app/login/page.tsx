@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuctionStore } from "@/store/auctionStore";
 import { AuthService } from "@/services/authService";
+import { UserRole } from "@/types/auction.types";
 import LoginPage from "@/components/auth/LoginPage";
 import AuctionBoard from "@/components/auction/AuctionBoard";
 import BidControls from "@/components/auction/BidControls";
@@ -13,13 +15,26 @@ import BidHistory from "@/components/auction/BidHistory";
 import ResultBanner from "@/components/auction/ResultBanner";
 import AdminUserCards from "@/components/auction/AdminUserCards";
 import ResultsView from "@/components/auction/ResultsView";
+import BiddersList from "@/components/auction/BiddersList";
 import AccountMenu from "@/app/_components/AccountMenu";
 
 export default function AuctionRoomPage() {
+  const router = useRouter();
   const { currentUserId, currentUserRole, users, status, login, dismissResults } =
     useAuctionStore();
 
   const [hydrated, setHydrated] = useState(false);
+  const [redirectingAdmin, setRedirectingAdmin] = useState(false);
+
+  // Fresh key login from the form. Admins land on their dashboard instead of the
+  // auction room; from there they can open the room when they want to run it.
+  // (Hydrating an existing session calls store.login directly, so returning to
+  // /login as an already-signed-in admin still shows the room — no redirect.)
+  const handleKeyLogin = async (userId: string, role: UserRole) => {
+    if (role === "ADMIN") setRedirectingAdmin(true);
+    await login(userId, role);
+    if (role === "ADMIN") router.replace("/admin");
+  };
 
   // Persist the logged-in username for the public SiteHeader to read.
   // (UI-only: the header lives on marketing pages and must not import the
@@ -61,6 +76,19 @@ export default function AuctionRoomPage() {
     return null;
   }
 
+  // Admin just logged in from the form — keep the room hidden until we navigate
+  // to the dashboard, so it never flashes.
+  if (redirectingAdmin) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <div className="flex items-center gap-3 text-sm text-zinc-400">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-emerald-400" />
+          Opening admin dashboard…
+        </div>
+      </main>
+    );
+  }
+
   // Back button (UI only) – shown on the pre-login screen, where there is no
   // account card yet.
   const BackToHome = () => (
@@ -92,7 +120,7 @@ export default function AuctionRoomPage() {
     return (
       <>
         <BackToHome />
-        <LoginPage onLogin={login} />
+        <LoginPage onLogin={handleKeyLogin} />
       </>
     );
   }
@@ -136,9 +164,10 @@ export default function AuctionRoomPage() {
             <AuctionBoard />
           </div>
 
-          {/* Bidding — second on mobile, right column on desktop */}
+          {/* Bidding — second on mobile, right column on desktop.
+              Admins can't bid, so they get the live Bidders list instead. */}
           <div className="order-2 flex flex-col items-center gap-6 animate-fade-up [animation-delay:140ms] lg:order-3">
-            <BidControls />
+            {currentUserRole === "ADMIN" ? <BiddersList /> : <BidControls />}
           </div>
 
           {/* Balance / admin / history — left column on desktop, last on mobile */}

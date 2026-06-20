@@ -13,8 +13,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AccountService } from "@/services/accountService";
+import { AuctionEngine } from "@/services/auctionEngine";
 import { supabase } from "@/lib/supabase";
-import { Profile, DEFAULT_ACCOUNT_ROLE } from "@/types/account.types";
+import { Profile, DEFAULT_ACCOUNT_ROLE, BIDDER_ROLE } from "@/types/account.types";
 import { GradientCard } from "@/app/_components/ui";
 import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
 import Logo from "@/app/_components/Logo";
@@ -51,6 +52,24 @@ export default function DashboardPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [entering, setEntering] = useState(false);
+  const [enterError, setEnterError] = useState<string | null>(null);
+
+  // A bidder joins the live auction: provision their participant on the server,
+  // then enter the auction room (the room hydrates from this session).
+  const handleEnterAuction = async () => {
+    setEntering(true);
+    setEnterError(null);
+    const res = await AuctionEngine.enterAuctionAsMember();
+    if (res.success && res.userId) {
+      sessionStorage.setItem("auction_user_id", res.userId);
+      sessionStorage.setItem("auction_user_role", "USER");
+      router.push("/login");
+    } else {
+      setEnterError(res.error ?? "Could not join the auction");
+      setEntering(false);
+    }
+  };
 
   useEffect(() => {
     let settled = false;
@@ -103,6 +122,7 @@ export default function DashboardPage() {
 
   const role = roleStyle(profile.role);
   const isGuest = profile.role.toLowerCase() === DEFAULT_ACCOUNT_ROLE;
+  const isBidder = profile.role.toLowerCase() === BIDDER_ROLE;
   const memberSince = new Date(profile.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
@@ -146,6 +166,35 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Bidder: enter the live auction */}
+        {isBidder && (
+          <div className="mt-8 animate-fade-up rounded-2xl bg-emerald-400/10 p-5 ring-1 ring-emerald-400/25 sm:mt-10">
+            <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+              <div>
+                <p className="text-sm font-semibold text-emerald-100">
+                  You&apos;re approved to bid.
+                </p>
+                <p className="mt-1 text-xs text-emerald-200/80">
+                  Join the live auction room to place bids. The admin sets your budget.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleEnterAuction}
+                disabled={entering}
+                className="w-full shrink-0 rounded-2xl bg-emerald-500/20 px-6 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:opacity-60 sm:w-auto"
+              >
+                {entering ? "Joining…" : "Enter the auction →"}
+              </button>
+            </div>
+            {enterError && (
+              <p className="mt-3 text-center text-xs font-semibold text-red-200">
+                {enterError}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Pending-role notice for fresh accounts */}
         {isGuest && (

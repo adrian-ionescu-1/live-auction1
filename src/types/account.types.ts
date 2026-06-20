@@ -18,3 +18,15 @@ export interface Profile {
 
 /** The default role every Discord account receives until an admin changes it. */
 export const DEFAULT_ACCOUNT_ROLE = "guest";
+
+/** The role an admin grants to let a member bid in auctions. */
+export const BIDDER_ROLE = "bidder";
+
+/** A community member (Discord account) as seen in the admin directory. */
+export interface Member {
+  id: string;
+  username: string;
+  avatarUrl: string | null;
+  role: string;
+  banned: boolean;
+}

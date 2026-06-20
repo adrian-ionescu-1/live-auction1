@@ -26,6 +26,7 @@ export default function BidControls() {
   const reachedTarget = wonCount >= TARGET_PLAYERS;
 
   const isActive = status === 'active';
+  const isBanned = !!currentUser?.banned;
 
   // after winning the current player, how many slots are left?
   const remainingAfterWin = Math.max(0, TARGET_PLAYERS - (wonCount + 1));
@@ -35,7 +36,8 @@ export default function BidControls() {
     !!currentUser &&
     currentUserRole === 'USER' &&
     isActive &&
-    !reachedTarget;
+    !reachedTarget &&
+    !isBanned;
   // -------------------------------------
 
   const handlePresetBid = async (increment: number) => {
@@ -126,6 +128,18 @@ export default function BidControls() {
         )}
       </div>
 
+      {/* Banned notice — can watch, cannot bid */}
+      {isBanned && (
+        <div className="rounded-2xl bg-red-500/12 ring-1 ring-red-400/25 p-3 mb-3">
+          <p className="text-sm text-red-200 text-center font-semibold">
+            You are banned from bidding by the admin.
+          </p>
+          <p className="mt-1 text-xs text-red-200/80 text-center">
+            You can still watch the auction. Bidding unlocks if the admin lifts the ban.
+          </p>
+        </div>
+      )}
+
       {/* Status-based hint */}
       {!isActive && status !== 'idle' && (
         <div className="rounded-2xl bg-amber-500/12 ring-1 ring-amber-400/20 p-3 mb-3">
@@ -203,10 +217,12 @@ export default function BidControls() {
         </div>
       )}
 
-      {currentUser.balance === 0 && (
-        <div className="rounded-2xl bg-red-500/10 ring-1 ring-red-400/20 p-3">
-          <p className="text-sm text-red-200 text-center font-semibold">
-            You have no balance left!
+      {!isBanned && currentUser.balance === 0 && (
+        <div className="rounded-2xl bg-amber-500/10 ring-1 ring-amber-400/20 p-3">
+          <p className="text-sm text-amber-200 text-center font-semibold">
+            {wonCount === 0
+              ? 'Waiting for the admin to set your budget.'
+              : 'You have no balance left!'}
           </p>
         </div>
       )}
