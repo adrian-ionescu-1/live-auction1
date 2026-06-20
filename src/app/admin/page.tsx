@@ -153,9 +153,9 @@ export default function AdminOverviewPage() {
           desc="Review the standard draft structure and rules."
         />
         <NavCard
-          href="/spectator"
-          title="Spectator view"
-          desc="See what spectators see during a live auction."
+          href="/admin/matches"
+          title="Matches"
+          desc="Tournament fixtures between the squads. Coming soon."
         />
       </div>
     </>
