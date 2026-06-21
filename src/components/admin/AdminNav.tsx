@@ -17,11 +17,20 @@ const NAV: NavItem[] = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/members", label: "Members" },
   {
-    href: "/admin/events",
+    href: "/admin/community-events",
     label: "Events",
     children: [
-      { href: "/admin/events/new", label: "Create event" },
-      { href: "/admin/events", label: "All events" },
+      { href: "/admin/community-events/new", label: "Create event" },
+      { href: "/admin/community-events", label: "All events" },
+      { href: "/admin/community-events/participants", label: "Participant lists" },
+    ],
+  },
+  {
+    href: "/admin/events",
+    label: "Auctions",
+    children: [
+      { href: "/admin/events/new", label: "Create auction" },
+      { href: "/admin/events", label: "All auctions" },
     ],
   },
   { href: "/admin/room", label: "Auction room" },

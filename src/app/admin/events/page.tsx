@@ -224,17 +224,17 @@ export default function EventsListPage() {
       <div className="flex animate-fade-up flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
-            Events
+            Auctions
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Tap an event to see its members or add anyone who was missed.
+            Tap an auction to see its members or add anyone who was missed.
           </p>
         </div>
         <Link
           href="/admin/events/new"
           className="rounded-2xl bg-emerald-500/15 px-4 py-2.5 text-sm font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25"
         >
-          + Create event
+          + Create auction
         </Link>
       </div>
 

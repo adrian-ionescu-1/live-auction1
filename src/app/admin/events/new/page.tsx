@@ -12,6 +12,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MembersService } from "@/services/membersService";
 import { EventsService } from "@/services/eventsService";
+import { CommunityEventsService } from "@/services/communityEventsService";
+import { CommunityEvent, CommunityRegistration } from "@/types/community-event.types";
+import { registrationState } from "@/components/admin/communityEventMeta";
 import { AuctionEngine } from "@/services/auctionEngine";
 import { Member } from "@/types/account.types";
 import { Player } from "@/types/auction.types";
@@ -297,6 +300,13 @@ export default function CreateEventPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Optional: source the auction players from a community event whose registration
+  // has ended, instead of the players already in the database.
+  const [lists, setLists] = useState<CommunityEvent[]>([]);
+  const [selectedListId, setSelectedListId] = useState("");
+  const [listPreview, setListPreview] = useState<CommunityRegistration[]>([]);
+  const [listLoading, setListLoading] = useState(false);
+
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -315,6 +325,44 @@ export default function CreateEventPage() {
       active = false;
     };
   }, []);
+
+  // Load community lists whose registration has ended — those can feed the auction.
+  useEffect(() => {
+    let active = true;
+    CommunityEventsService.listEvents().then((all) => {
+      if (!active) return;
+      setLists(
+        all.filter(
+          (e) =>
+            // Standalone lists are always usable; event lists once registration ended.
+            e.kind === "list" ||
+            (e.registrationClosesAt !== null &&
+              registrationState(e.registrationOpensAt, e.registrationClosesAt) === "closed")
+        )
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Load the chosen list's participants for preview (and to confirm the count).
+  useEffect(() => {
+    if (!selectedListId) {
+      setListPreview([]);
+      return;
+    }
+    let active = true;
+    setListLoading(true);
+    CommunityEventsService.listRegistrations(selectedListId).then((regs) => {
+      if (!active) return;
+      setListPreview(regs);
+      setListLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [selectedListId]);
 
   // Derived reserve math, mirrored from the server (admin_create_event):
   // the cheapest a member can secure a player is opening + smallest button, so
@@ -380,12 +428,30 @@ export default function CreateEventPage() {
       excludedProfileIds: Array.from(excludedIds),
     });
     setConfirmOpen(false);
-    if (res.success) {
-      router.push("/admin/events");
-    } else {
+    if (!res.success) {
       setError(res.error ?? "Could not create the event");
       setSubmitting(false);
+      return;
     }
+
+    // If a registration list was chosen, replace the player pool with it.
+    if (selectedListId) {
+      const pool = await CommunityEventsService.replacePlayersFromList(
+        selectedListId,
+        openingNum
+      );
+      if (!pool.success) {
+        setError(
+          `Auction created, but loading the player list failed: ${
+            pool.error ?? "unknown error"
+          }`
+        );
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    router.push("/admin/events");
   };
 
   const extendPresets = [1, 5, 10];
@@ -394,7 +460,7 @@ export default function CreateEventPage() {
     <>
       <div className="animate-fade-up">
         <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
-          Create event
+          Create auction
         </h1>
         <p className="mt-2 text-sm text-zinc-400">
           Configure the rules below. The reserve and the minimum budget are calculated
@@ -680,39 +746,107 @@ export default function CreateEventPage() {
             onToggle={toggleExcluded}
           />
 
-          <div className="rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="min-w-0 rounded-3xl bg-white/5 p-5 ring-1 ring-white/10">
+            <div className="mb-3 flex items-center justify-between gap-2">
               <h3 className="text-base font-extrabold text-zinc-100">Players up for auction</h3>
-              <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-zinc-300 ring-1 ring-white/10">
-                {players.length}
+              <span className="shrink-0 rounded-full bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-zinc-300 ring-1 ring-white/10">
+                {selectedListId ? listPreview.length : players.length}
               </span>
             </div>
-            {loading ? (
-              <div className="h-24 animate-pulse rounded-2xl bg-black/25" />
-            ) : players.length === 0 ? (
-              <p className="text-sm text-zinc-500">
-                No players in the database yet. Seed the players table to auction them.
-              </p>
-            ) : (
-              <ol className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-                {players.map((p, i) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center gap-3 rounded-xl bg-black/25 px-3 py-2 ring-1 ring-white/10"
-                  >
-                    <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-white/5 text-xs font-bold tabular-nums text-zinc-400 ring-1 ring-white/10">
-                      {i + 1}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
-                      {p.name}
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums text-zinc-500">
-                      ${p.basePrice.toLocaleString()}
-                    </span>
-                  </li>
+
+            {/* Source: a finished registration list, or the players already in the DB. */}
+            <label className="block">
+              <span className="block text-xs font-semibold text-zinc-400">Player source</span>
+              <select
+                value={selectedListId}
+                onChange={(e) => setSelectedListId(e.target.value)}
+                className="mt-1.5 w-full min-w-0 rounded-xl bg-zinc-900 px-3 py-2.5 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+              >
+                <option value="" className="bg-zinc-900 text-zinc-100">
+                  Players already in the database
+                </option>
+                {lists.map((l) => (
+                  <option key={l.id} value={l.id} className="bg-zinc-900 text-zinc-100">
+                    {l.title}
+                    {l.region ? ` (${l.region.toUpperCase()})` : ""}
+                  </option>
                 ))}
-              </ol>
+              </select>
+              {lists.length === 0 && (
+                <span className="mt-1 block text-[11px] text-zinc-500">
+                  No finished registration lists yet — close an event&apos;s registration to use it
+                  here.
+                </span>
+              )}
+            </label>
+
+            {selectedListId && (
+              <p className="mt-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200/90 ring-1 ring-emerald-400/25">
+                These participants replace the auction player pool. Each card shows their battles,
+                win rate and average damage; the starting bid is the opening bid above.
+              </p>
             )}
+
+            <div className="mt-3">
+              {selectedListId ? (
+                listLoading ? (
+                  <div className="h-24 animate-pulse rounded-2xl bg-black/25" />
+                ) : listPreview.length === 0 ? (
+                  <p className="text-sm text-zinc-500">This list has no participants.</p>
+                ) : (
+                  <ol className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                    {listPreview.map((reg, i) => (
+                      <li
+                        key={reg.id}
+                        className="flex items-center gap-3 rounded-xl bg-black/25 px-3 py-2 ring-1 ring-white/10"
+                      >
+                        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-white/5 text-xs font-bold tabular-nums text-zinc-400 ring-1 ring-white/10">
+                          {i + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-zinc-100">
+                            {reg.playerName || reg.displayName}
+                          </span>
+                          {reg.blitzStats && (
+                            <span className="block text-[10px] tabular-nums text-zinc-500">
+                              {reg.blitzStats.battles.toLocaleString()} btl ·{" "}
+                              {reg.blitzStats.winrate.toFixed(1)}% ·{" "}
+                              {reg.blitzStats.avgDamage.toLocaleString()} dmg
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                )
+              ) : loading ? (
+                <div className="h-24 animate-pulse rounded-2xl bg-black/25" />
+              ) : players.length === 0 ? (
+                <p className="text-sm text-zinc-500">
+                  No players in the database yet. Pick a registration list above, or seed the
+                  players table.
+                </p>
+              ) : (
+                <ol className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                  {players.map((p, i) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center gap-3 rounded-xl bg-black/25 px-3 py-2 ring-1 ring-white/10"
+                    >
+                      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-white/5 text-xs font-bold tabular-nums text-zinc-400 ring-1 ring-white/10">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
+                        {p.name}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-zinc-500">
+                        ${p.basePrice.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -726,6 +860,10 @@ export default function CreateEventPage() {
           opensAtIso
             ? `Opens ${new Date(opensAtIso).toLocaleString()}.`
             : "Opens immediately."
+        }${
+          selectedListId
+            ? ` Player pool: ${listPreview.length} from the selected registration list.`
+            : ""
         } This becomes the live event.`}
         onConfirm={handleCreate}
         onCancel={() => setConfirmOpen(false)}
