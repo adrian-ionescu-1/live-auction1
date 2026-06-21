@@ -18,6 +18,9 @@ import { categoryHashtag } from "@/components/admin/communityEventMeta";
 import RegistrationFormDialog from "@/components/community/RegistrationFormDialog";
 import ImportListDialog, { ImportedRow } from "@/components/community/ImportListDialog";
 import { ValidatedPlayer } from "@/components/community/BlitzValidator";
+import { getCardVariant, randomVariantId } from "@/components/auction/cardDesigns";
+import { randomCountryCode } from "@/lib/flags";
+import Flag from "@/components/community/Flag";
 import ConfirmByNameDialog from "@/components/admin/ConfirmByNameDialog";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -132,15 +135,31 @@ export default function CommunityParticipantsPage() {
     displayName: string;
     values: Record<string, string>;
     blitz: ValidatedPlayer | null;
+    cardVariant: string;
+    flag: string | null;
   }) => {
     if (!adding) return;
+    // Instant duplicate-name warning (the RPC also enforces this server-side).
+    const incoming = (result.blitz?.playerName || result.displayName).trim().toLowerCase();
+    const existing = regs[adding.id] ?? [];
+    if (
+      incoming &&
+      existing.some(
+        (r) => (r.playerName || r.displayName).trim().toLowerCase() === incoming
+      )
+    ) {
+      setError(`"${result.blitz?.playerName || result.displayName}" is already in this list.`);
+      return;
+    }
     setBusy(true);
     setError(null);
     const res = await CommunityEventsService.addRegistration(
       adding.id,
       result.displayName,
       result.values,
-      result.blitz
+      result.blitz,
+      null,
+      { variant: result.cardVariant, flag: result.flag }
     );
     setBusy(false);
     if (res.success) {
@@ -156,6 +175,8 @@ export default function CommunityParticipantsPage() {
     displayName: string;
     values: Record<string, string>;
     blitz: ValidatedPlayer | null;
+    cardVariant: string;
+    flag: string | null;
   }) => {
     if (!editing) return;
     setBusy(true);
@@ -164,7 +185,8 @@ export default function CommunityParticipantsPage() {
       editing.reg.id,
       result.displayName,
       result.values,
-      result.blitz
+      result.blitz,
+      { variant: result.cardVariant, flag: result.flag }
     );
     setBusy(false);
     if (res.success) {
@@ -195,21 +217,40 @@ export default function CommunityParticipantsPage() {
     setBusy(true);
     setError(null);
     const id = importingTo.id;
+    // Skip rows whose name is already in the list, and skip duplicates within the
+    // file itself — no player may appear twice in one list.
+    const seen = new Set(
+      (regs[id] ?? []).map((r) => (r.playerName || r.displayName).trim().toLowerCase())
+    );
     let ok = 0;
+    let skipped = 0;
     for (const r of importRows) {
+      const key = r.displayName.trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      seen.add(key);
+      // Imported rows usually lack card/flag info, so assign each a random card
+      // design and a random country flag.
       const res = await CommunityEventsService.addRegistration(
         id,
         r.displayName,
         r.values,
-        r.stats ? { playerName: r.displayName, stats: r.stats } : null
+        r.stats ? { playerName: r.displayName, stats: r.stats } : null,
+        null,
+        { variant: randomVariantId(), flag: randomCountryCode() }
       );
       if (res.success) ok += 1;
+      else skipped += 1;
     }
     setBusy(false);
     setImportingTo(null);
     await loadRegs(id);
-    if (ok < importRows.length) {
-      setError(`Imported ${ok}/${importRows.length} — some rows could not be added.`);
+    if (skipped > 0) {
+      setError(
+        `Imported ${ok}/${importRows.length}. ${skipped} skipped (duplicate names already in the list).`
+      );
     }
   };
 
@@ -344,7 +385,10 @@ export default function CommunityParticipantsPage() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => setAdding(ev)}
+                        onClick={() => {
+                          setError(null);
+                          setAdding(ev);
+                        }}
                         className="rounded-xl bg-emerald-500/15 px-3 py-2 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25"
                       >
                         + Add participant
@@ -412,8 +456,12 @@ export default function CommunityParticipantsPage() {
                             className="min-w-0 rounded-2xl bg-black/25 p-3 ring-1 ring-white/10"
                           >
                             <div className="flex flex-wrap items-center gap-2">
+                              <Flag code={reg.flag} className="h-4 w-auto" />
                               <span className="min-w-0 flex-1 truncate text-sm font-bold text-zinc-100">
                                 {reg.displayName}
+                              </span>
+                              <span className="shrink-0 rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold text-violet-200 ring-1 ring-violet-400/25">
+                                🎴 {getCardVariant(reg.cardVariant).name}
                               </span>
                               <SourceBadge reg={reg} />
                             </div>
@@ -469,7 +517,10 @@ export default function CommunityParticipantsPage() {
                             <div className="mt-2 flex gap-2">
                               <button
                                 type="button"
-                                onClick={() => setEditing({ event: ev, reg })}
+                                onClick={() => {
+                                  setError(null);
+                                  setEditing({ event: ev, reg });
+                                }}
                                 className="rounded-lg bg-white/5 px-2.5 py-1 text-xs font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
                               >
                                 Edit
@@ -503,9 +554,13 @@ export default function CommunityParticipantsPage() {
         region={adding?.region ?? null}
         confirmLabel="Add participant"
         busy={busy}
+        error={error}
         showNameField
         onSubmit={handleAdd}
-        onCancel={() => setAdding(null)}
+        onCancel={() => {
+          setAdding(null);
+          setError(null);
+        }}
       />
 
       {/* Edit a participant's data. */}
@@ -516,12 +571,18 @@ export default function CommunityParticipantsPage() {
         region={editing?.event.region ?? null}
         confirmLabel="Save changes"
         busy={busy}
+        error={error}
         showNameField
         initialName={editing?.reg.displayName ?? ""}
         initialValues={editing?.reg.values ?? {}}
         initialBlitz={regToValidated(editing?.reg)}
+        initialCardVariant={editing?.reg.cardVariant ?? null}
+        initialFlag={editing?.reg.flag ?? null}
         onSubmit={handleEdit}
-        onCancel={() => setEditing(null)}
+        onCancel={() => {
+          setEditing(null);
+          setError(null);
+        }}
       />
 
       {/* Name a new standalone list, optionally pick a Blitz region. */}

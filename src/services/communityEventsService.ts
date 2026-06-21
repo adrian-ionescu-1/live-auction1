@@ -5,6 +5,7 @@ import {
   BlitzStats,
   CommunityEvent,
   CommunityRegistration,
+  MyRegistration,
   RegistrationField,
 } from "@/types/community-event.types";
 
@@ -87,6 +88,8 @@ function mapRegistration(row: Record<string, unknown>): CommunityRegistration {
     accountId: row.account_id != null ? Number(row.account_id) : null,
     playerName: (row.player_name as string) ?? null,
     blitzStats,
+    cardVariant: (row.card_variant as string) ?? null,
+    flag: (row.flag as string) ?? null,
     createdAt: (row.created_at as string) ?? new Date().toISOString(),
     updatedAt: (row.updated_at as string) ?? new Date().toISOString(),
     profileUsername: (row.profile_username as string) ?? null,
@@ -143,6 +146,42 @@ export class CommunityEventsService {
       eventId: (d.event_id as string) ?? null,
       error: (d.error as string) ?? null,
     };
+  }
+
+  /**
+   * The signed-in member's own registrations with full card/flag/stats data
+   * (RLS limits the rows to their own). Used to pre-fill the edit dialog and to
+   * render their personalized card on the dashboard profile.
+   */
+  static async listMyRegistrations(): Promise<MyRegistration[]> {
+    const { data, error } = await supabase
+      .from("community_event_registrations")
+      .select("event_id, display_name, player_name, blitz_stats, card_variant, flag");
+    if (error) {
+      console.error("Error loading my registrations:", error);
+      return [];
+    }
+    return (data ?? []).map((raw) => {
+      const r = raw as Record<string, unknown>;
+      const s = r.blitz_stats;
+      let blitzStats: BlitzStats | null = null;
+      if (s && typeof s === "object") {
+        const o = s as Record<string, unknown>;
+        blitzStats = {
+          battles: Number(o.battles) || 0,
+          winrate: Number(o.winrate) || 0,
+          avgDamage: Number(o.avgDamage) || 0,
+        };
+      }
+      return {
+        eventId: r.event_id as string,
+        displayName: (r.display_name as string) ?? "Participant",
+        playerName: (r.player_name as string) ?? null,
+        blitzStats,
+        cardVariant: (r.card_variant as string) ?? null,
+        flag: (r.flag as string) ?? null,
+      };
+    });
   }
 
   /** Event ids the signed-in member has already registered for (own rows only). */
@@ -297,7 +336,8 @@ export class CommunityEventsService {
     displayName: string,
     values: Record<string, string>,
     blitz?: { accountId?: number | null; playerName: string; stats: BlitzStats } | null,
-    profileId: string | null = null
+    profileId: string | null = null,
+    card?: { variant?: string | null; flag?: string | null }
   ): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("admin_add_community_registration", {
       p_event_id: eventId,
@@ -307,6 +347,8 @@ export class CommunityEventsService {
       p_player_name: blitz?.playerName ?? null,
       p_blitz_stats: blitz?.stats ?? null,
       p_profile_id: profileId,
+      p_card_variant: card?.variant ?? null,
+      p_flag: card?.flag ?? null,
       p_admin_key: adminKey(),
     });
     return unwrap(data, error);
@@ -316,7 +358,8 @@ export class CommunityEventsService {
     registrationId: string,
     displayName: string,
     values: Record<string, string>,
-    blitz?: { accountId: number; playerName: string; stats: BlitzStats } | null
+    blitz?: { accountId: number; playerName: string; stats: BlitzStats } | null,
+    card?: { variant?: string | null; flag?: string | null }
   ): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("admin_update_community_registration", {
       p_registration_id: registrationId,
@@ -325,6 +368,8 @@ export class CommunityEventsService {
       p_account_id: blitz?.accountId ?? null,
       p_player_name: blitz?.playerName ?? null,
       p_blitz_stats: blitz?.stats ?? null,
+      p_card_variant: card?.variant ?? null,
+      p_flag: card?.flag ?? null,
       p_admin_key: adminKey(),
     });
     return unwrap(data, error);
@@ -372,7 +417,8 @@ export class CommunityEventsService {
   static async register(
     eventId: string,
     values: Record<string, string>,
-    blitz?: { accountId: number; playerName: string; stats: BlitzStats } | null
+    blitz?: { accountId: number; playerName: string; stats: BlitzStats } | null,
+    card?: { variant?: string | null; flag?: string | null }
   ): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("register_for_community_event", {
       p_event_id: eventId,
@@ -380,6 +426,8 @@ export class CommunityEventsService {
       p_account_id: blitz?.accountId ?? null,
       p_player_name: blitz?.playerName ?? null,
       p_blitz_stats: blitz?.stats ?? null,
+      p_card_variant: card?.variant ?? null,
+      p_flag: card?.flag ?? null,
     });
     return unwrap(data, error);
   }

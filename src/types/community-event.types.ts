@@ -54,6 +54,16 @@ export interface CommunityEvent {
   updatedAt: string;
 }
 
+/** The signed-in member's own registration (for editing + the profile card). */
+export interface MyRegistration {
+  eventId: string;
+  displayName: string;
+  playerName: string | null;
+  blitzStats: BlitzStats | null;
+  cardVariant: string | null;
+  flag: string | null;
+}
+
 /** A participant's submission, as the admin sees it (joined with their profile). */
 export interface CommunityRegistration {
   id: string;
@@ -68,6 +78,10 @@ export interface CommunityRegistration {
   playerName: string | null;
   /** Career stats captured at validation, or null. */
   blitzStats: BlitzStats | null;
+  /** Chosen card design id (see cardDesigns), or null for the default. */
+  cardVariant: string | null;
+  /** Chosen country flag (ISO alpha-2 code), or null for none. */
+  flag: string | null;
   createdAt: string;
   updatedAt: string;
   /** Profile of a self-registrant ("where they come from"). Null for manual rows. */

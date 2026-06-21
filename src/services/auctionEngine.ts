@@ -22,6 +22,8 @@ export class AuctionEngine {
         winrate: Number(p.winrate) || 0,
         avg_damage: Number(p.avg_damage) || 0,
         basePrice: Number(p.base_price) || 100,
+        variant: (p.card_variant as string) ?? null,
+        flag: (p.flag as string) ?? null,
       }));
     } catch (error) {
       console.error('Error in loadPlayers:', error);

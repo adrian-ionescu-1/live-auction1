@@ -20,6 +20,7 @@ import {
   categoryHashtag,
 } from "@/components/admin/communityEventMeta";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import UnsavedChangesGuard from "@/components/admin/UnsavedChangesGuard";
 
 const inputClass =
   "w-full min-w-0 rounded-xl bg-black/30 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40";
@@ -250,6 +251,25 @@ export default function CreateCommunityEventPage() {
   const canSubmit =
     titleValid && rolesValid && fieldsValid && customValid && linkValid && !submitting;
 
+  // Nothing is saved until "Create" succeeds, so warn before leaving once the
+  // admin has changed anything from the pristine defaults.
+  const dirty =
+    !submitting &&
+    (title.trim() !== "" ||
+      content.trim() !== "" ||
+      customName.trim() !== "" ||
+      categoryKey !== "wot_blitz" ||
+      region !== "" ||
+      hasLink ||
+      linkLabel !== "" ||
+      linkUrl !== "" ||
+      startsAt !== "" ||
+      endsAt !== "" ||
+      regOpensAt !== "" ||
+      regClosesAt !== "" ||
+      fields.length > 0 ||
+      !(roles.size === 1 && roles.has("bidder")));
+
   const handleSubmit = async () => {
     setConfirmOpen(false);
     setSubmitting(true);
@@ -280,6 +300,7 @@ export default function CreateCommunityEventPage() {
 
   return (
     <>
+      <UnsavedChangesGuard when={dirty} />
       <div className="animate-fade-up">
         <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
           Create event

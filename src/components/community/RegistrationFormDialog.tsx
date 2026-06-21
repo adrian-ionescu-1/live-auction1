@@ -8,6 +8,9 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlitzRegion, RegistrationField } from "@/types/community-event.types";
 import BlitzValidator, { ValidatedPlayer } from "@/components/community/BlitzValidator";
+import CardPicker from "@/components/community/CardPicker";
+import FlagPicker from "@/components/community/FlagPicker";
+import { randomVariantId } from "@/components/auction/cardDesigns";
 
 const inputClass =
   "w-full min-w-0 rounded-xl bg-black/40 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40";
@@ -26,6 +29,8 @@ export default function RegistrationFormDialog({
   initialValues,
   region = null,
   initialBlitz = null,
+  initialCardVariant = null,
+  initialFlag = null,
   requireConsent = false,
   onSubmit,
   onCancel,
@@ -43,18 +48,26 @@ export default function RegistrationFormDialog({
   /** When set, the event requires validating a real Blitz account on this region. */
   region?: BlitzRegion | null;
   initialBlitz?: ValidatedPlayer | null;
+  /** Preselect a card design (editing). Defaults to a random one when null. */
+  initialCardVariant?: string | null;
+  /** Preselect a country flag (ISO code) when editing. */
+  initialFlag?: string | null;
   /** Member self-registration: require a "details correct + accept terms" tick. */
   requireConsent?: boolean;
   onSubmit: (result: {
     displayName: string;
     values: Record<string, string>;
     blitz: ValidatedPlayer | null;
+    cardVariant: string;
+    flag: string | null;
   }) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [validated, setValidated] = useState<ValidatedPlayer | null>(null);
+  const [cardVariant, setCardVariant] = useState<string>(randomVariantId);
+  const [flag, setFlag] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [touched, setTouched] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -65,9 +78,13 @@ export default function RegistrationFormDialog({
     setName(initialName);
     setValues(initialValues ? { ...initialValues } : {});
     setValidated(initialBlitz);
+    // Keep the participant's existing design when editing; otherwise start with a
+    // random one already selected so the card never looks empty.
+    setCardVariant(initialCardVariant || randomVariantId());
+    setFlag(initialFlag);
     setConsent(false);
     setTouched(false);
-  }, [isOpen, initialName, initialValues, initialBlitz]);
+  }, [isOpen, initialName, initialValues, initialBlitz, initialCardVariant, initialFlag]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -96,8 +113,13 @@ export default function RegistrationFormDialog({
     setTouched(true);
     if (!canSubmit) return;
     const displayName = blitzRequired && validated ? validated.playerName : name.trim();
-    onSubmit({ displayName, values, blitz: validated });
+    onSubmit({ displayName, values, blitz: validated, cardVariant, flag });
   };
+
+  // Render the design gallery with the participant's own identity + stats.
+  const previewName =
+    (blitzRequired && validated ? validated.playerName : name.trim()) || "Your name";
+  const previewStats = validated?.stats ?? null;
 
   return createPortal(
     <div
@@ -178,6 +200,23 @@ export default function RegistrationFormDialog({
                 </label>
               );
             })}
+          </div>
+
+          {/* Country flag + card design pickers. */}
+          <div className="mt-4 space-y-4 border-t border-white/10 pt-4">
+            <FlagPicker value={flag} onChange={setFlag} />
+            <CardPicker
+              value={cardVariant}
+              onChange={setCardVariant}
+              preview={{
+                name: previewName,
+                flag,
+                winrate: previewStats?.winrate ?? null,
+                battles: previewStats?.battles ?? null,
+                avgDamage: previewStats?.avgDamage ?? null,
+                hasStats: previewStats !== null,
+              }}
+            />
           </div>
 
           {requireConsent && (
