@@ -16,7 +16,11 @@ import {
 import { createPortal } from "react-dom";
 import { Member } from "@/types/account.types";
 import { MembersService } from "@/services/membersService";
-import { ASSIGNABLE_ROLES, roleMeta } from "./roleMeta";
+import { ASSIGNABLE_ROLES, primaryRole, roleMeta } from "./roleMeta";
+
+// Roles offered as add/remove toggles. 'guest' is the implicit baseline (the
+// state with no real role), surfaced via the separate "Reset to Guest" action.
+const TOGGLE_ROLES = ASSIGNABLE_ROLES.filter((r) => r !== "guest");
 import GrantAdminDialog from "./GrantAdminDialog";
 import ConfirmActionDialog from "./ConfirmActionDialog";
 
@@ -118,22 +122,41 @@ export default function MemberActions({
     };
   }, [open]);
 
-  const changeRole = async (role: string) => {
-    if (member.role.toLowerCase() === role) {
-      setOpen(false);
-      return;
-    }
-    // Promoting to Admin is dangerous: route it through the confirmation dialog
-    // rather than applying it immediately.
-    if (role === "admin") {
+  // Push a new role set to the parent, re-deriving the primary role.
+  const applyRoles = (roles: string[]) => {
+    const next = roles.length ? roles : ["guest"];
+    onChange({ ...member, roles: next, role: primaryRole(next) });
+  };
+
+  // Add or remove a single role, keeping the rest. Granting Admin is dangerous,
+  // so it's routed through the confirmation dialog instead of applied on click.
+  const toggleRole = async (role: string) => {
+    const has = member.roles.includes(role);
+    if (!has && role === "admin") {
       setConfirmAdmin(true);
       return;
     }
     setBusy(true);
-    const ok = await MembersService.setRole(member.id, role);
+    const ok = has
+      ? await MembersService.removeRole(member.id, role)
+      : await MembersService.addRole(member.id, role);
     setBusy(false);
     if (ok) {
-      onChange({ ...member, role });
+      const next = has
+        ? member.roles.filter((r) => r !== role)
+        : [...member.roles.filter((r) => r !== "guest"), role];
+      applyRoles(next);
+      // Keep the popover open so the admin can toggle several roles at once.
+    }
+  };
+
+  // Reset a member back to the plain Guest baseline (replaces all roles).
+  const resetToGuest = async () => {
+    setBusy(true);
+    const ok = await MembersService.setRole(member.id, "guest");
+    setBusy(false);
+    if (ok) {
+      applyRoles(["guest"]);
       setOpen(false);
     }
   };
@@ -141,12 +164,11 @@ export default function MemberActions({
   // Runs only after the admin clears both steps of the danger dialog.
   const confirmGrantAdmin = async () => {
     setBusy(true);
-    const ok = await MembersService.setRole(member.id, "admin");
+    const ok = await MembersService.addRole(member.id, "admin");
     setBusy(false);
     if (ok) {
-      onChange({ ...member, role: "admin" });
+      applyRoles([...member.roles.filter((r) => r !== "guest"), "admin"]);
       setConfirmAdmin(false);
-      setOpen(false);
     }
   };
 
@@ -277,17 +299,18 @@ export default function MemberActions({
           {showRoles && (
             <div className="p-1.5">
               <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">
-                Set role
+                Roles — tap to add or remove
               </div>
-              {ASSIGNABLE_ROLES.map((r) => {
-                const active = member.role.toLowerCase() === r;
+              {TOGGLE_ROLES.map((r) => {
+                const active = member.roles.includes(r);
                 return (
                   <button
                     key={r}
                     type="button"
-                    role="menuitem"
+                    role="menuitemcheckbox"
+                    aria-checked={active}
                     disabled={busy}
-                    onClick={() => changeRole(r)}
+                    onClick={() => toggleRole(r)}
                     className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm transition disabled:opacity-50 ${
                       active
                         ? "bg-emerald-500/15 font-semibold text-emerald-100"
@@ -295,10 +318,30 @@ export default function MemberActions({
                     }`}
                   >
                     {roleMeta(r).label}
-                    {active && <span aria-hidden>✓</span>}
+                    <span
+                      aria-hidden
+                      className={`grid h-4 w-4 place-items-center rounded border text-[10px] ${
+                        active
+                          ? "border-emerald-400/50 bg-emerald-500/30 text-emerald-100"
+                          : "border-white/15 text-transparent"
+                      }`}
+                    >
+                      ✓
+                    </span>
                   </button>
                 );
               })}
+              {member.roles.some((r) => r !== "guest") && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={busy}
+                  onClick={resetToGuest}
+                  className="mt-1 w-full rounded-xl px-3 py-2 text-xs font-semibold text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200 disabled:opacity-50"
+                >
+                  Reset to Guest
+                </button>
+              )}
             </div>
           )}
 
@@ -315,8 +358,11 @@ export default function MemberActions({
                     : "text-red-200 hover:bg-red-500/15"
                 }`}
               >
-                {member.banned ? "Unban member" : "Ban member"}
+                {member.banned ? "Unban bidder" : "Ban bidder"}
               </button>
+              <p className="mt-1 px-1 text-[10px] leading-snug text-zinc-500">
+                Only blocks bidding in auctions. Everything else stays available.
+              </p>
             </div>
           )}
 

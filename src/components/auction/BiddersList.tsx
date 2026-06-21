@@ -49,7 +49,7 @@ export default function BiddersList() {
     let active = true;
     MembersService.getAllMembers().then((all) => {
       if (!active) return;
-      setMembers(all.filter((m) => m.role.toLowerCase() === BIDDER_ROLE));
+      setMembers(all.filter((m) => m.roles.includes(BIDDER_ROLE)));
       setLoading(false);
     });
     return () => {

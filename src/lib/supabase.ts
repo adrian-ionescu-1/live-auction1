@@ -59,10 +59,19 @@ export interface SupabaseProfile {
   /** Admin-set display name override; null = use username. */
   display_name: string | null;
   avatar_url: string | null;
+  /** Primary role (derived from {@link roles} by precedence). */
   role: string;
+  /** Full set of roles the member holds. */
+  roles: string[] | null;
   banned: boolean;
   created_at: string;
   updated_at: string;
+  // WoT Blitz onboarding (see the wotblitz_guest_consent migration).
+  wotblitz_consented_at: string | null;
+  blitz_region: string | null;
+  blitz_account_id: number | null;
+  blitz_nickname: string | null;
+  blitz_stats: unknown;
 }
 
 export interface SupabasePlayer {

@@ -2,6 +2,7 @@
 // Wargaming application_id on the server; the UI only ever calls our own routes.
 
 import { BlitzRegion, BlitzStats } from "@/types/community-event.types";
+import { BlitzAccountDetails } from "@/types/blitz.types";
 
 export interface BlitzAccount {
   accountId: number;
@@ -43,6 +44,21 @@ export class BlitzClient {
       return { player: body.stats ?? null, error: null };
     } catch {
       return { player: null, error: "Network error during lookup" };
+    }
+  }
+
+  /** Fetch one account's rich career profile (member dashboard). */
+  static async account(
+    region: BlitzRegion,
+    accountId: number
+  ): Promise<{ details: BlitzAccountDetails | null; error: string | null }> {
+    try {
+      const res = await fetch(`/api/blitz/account?region=${region}&accountId=${accountId}`);
+      const body = await res.json();
+      if (!res.ok) return { details: null, error: body.error ?? "Lookup failed" };
+      return { details: body.details ?? null, error: null };
+    } catch {
+      return { details: null, error: "Network error during lookup" };
     }
   }
 }

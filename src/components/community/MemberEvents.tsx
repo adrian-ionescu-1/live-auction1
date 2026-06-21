@@ -12,7 +12,14 @@ import { registrationState } from "@/components/admin/communityEventMeta";
 import CommunityEventView from "@/components/community/CommunityEventView";
 import RegistrationFormDialog from "@/components/community/RegistrationFormDialog";
 
-export default function MemberEvents({ role }: { role: string }) {
+export default function MemberEvents({
+  roles,
+  onChanged,
+}: {
+  roles: string[];
+  /** Called after a successful (un)registration, so a parent can refresh too. */
+  onChanged?: () => void;
+}) {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [registered, setRegistered] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -22,15 +29,18 @@ export default function MemberEvents({ role }: { role: string }) {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const lc = role.toLowerCase();
+    const lc = roles.map((r) => r.toLowerCase());
     const [all, mine] = await Promise.all([
       CommunityEventsService.listEvents(),
       CommunityEventsService.listMyRegisteredEventIds(),
     ]);
-    setEvents(all.filter((e) => e.kind === "event" && e.visibleRoles.includes(lc)));
+    // An event shows if ANY of the member's roles is in its visible_roles.
+    setEvents(
+      all.filter((e) => e.kind === "event" && e.visibleRoles.some((r) => lc.includes(r)))
+    );
     setRegistered(mine);
     setLoading(false);
-  }, [role]);
+  }, [roles]);
 
   useEffect(() => {
     load();
@@ -48,6 +58,7 @@ export default function MemberEvents({ role }: { role: string }) {
     if (res.success) {
       setActive(null);
       await load();
+      onChanged?.();
     } else {
       setError(res.error ?? "Could not register");
     }
@@ -111,6 +122,7 @@ export default function MemberEvents({ role }: { role: string }) {
         busy={busy}
         error={error}
         initialValues={{}}
+        requireConsent
         onSubmit={handleSubmit}
         onCancel={() => setActive(null)}
       />

@@ -1,81 +1,45 @@
-//
-// Dedicated area for people who signed in with Discord (real accounts).
-// Key-based auction participants never land here — they go straight to the
-// auction room. The top bar reuses the shared <AccountMenu /> card (avatar +
-// Home + Log out), the same one shown on the navbar and the auction screens.
-//
-// For now it shows the account identity + role and a few "coming soon" cards.
-// We grow the member-only features here over time.
+// The member dashboard shell. Loads the signed-in Discord profile, then renders
+// a persistent identity header + a section navbar whose tabs depend on the
+// member's roles (a member can hold several at once). Each section is its own
+// component; this file owns data loading, the active section and the red-dot
+// notifications. Mobile-first.
 
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AccountService } from "@/services/accountService";
 import { AuctionEngine } from "@/services/auctionEngine";
 import { EventsService } from "@/services/eventsService";
+import { CommunityEventsService } from "@/services/communityEventsService";
 import { supabase } from "@/lib/supabase";
-import {
-  Profile,
-  DEFAULT_ACCOUNT_ROLE,
-  BIDDER_ROLE,
-  EXCLUDED_ROLE,
-} from "@/types/account.types";
+import { Profile, WOTBLITZ_ROLE, BIDDER_ROLE, EXCLUDED_ROLE } from "@/types/account.types";
 import { AuctionEvent, MyEventResults } from "@/types/event.types";
-import { GradientCard } from "@/app/_components/ui";
+import { CommunityEvent } from "@/types/community-event.types";
+import { registrationState } from "@/components/admin/communityEventMeta";
+import { roleMeta } from "@/components/admin/roleMeta";
 import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
 import ExcludedScreen from "@/app/_components/ExcludedScreen";
 import Logo from "@/app/_components/Logo";
 import MemberEvents from "@/components/community/MemberEvents";
+import MemberNav, { MemberNavItem } from "@/components/dashboard/MemberNav";
+import WelcomeSection from "@/components/dashboard/sections/WelcomeSection";
+import ProfileSection, { DashboardNotice } from "@/components/dashboard/sections/ProfileSection";
+import AuctionsSection from "@/components/dashboard/sections/AuctionsSection";
+import ResultsSection from "@/components/dashboard/sections/ResultsSection";
+import ComingSoonSection from "@/components/dashboard/sections/ComingSoonSection";
 
-type RoleStyle = { label: string; chip: string };
+const SEEN_KEY = "dashboard_seen_notices";
 
-// Known roles get a nicer label/color; anything else falls back gracefully so
-// admins can invent new roles without touching the code.
-const ROLE_STYLES: Record<string, RoleStyle> = {
-  guest: {
-    label: "Guest",
-    chip: "bg-amber-400/15 text-amber-200 ring-amber-400/30",
-  },
-  admin: {
-    label: "Admin",
-    chip: "bg-fuchsia-400/15 text-fuchsia-200 ring-fuchsia-400/30",
-  },
-};
-
-function roleStyle(role: string): RoleStyle {
-  return (
-    ROLE_STYLES[role.toLowerCase()] ?? {
-      label: role.charAt(0).toUpperCase() + role.slice(1),
-      chip: "bg-white/10 text-zinc-200 ring-white/15",
-    }
-  );
-}
-
-// "2d 3h 04m 09s" style remaining time for the scheduled-open countdown.
-function formatCountdown(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000));
-  const d = Math.floor(total / 86400);
-  const h = Math.floor((total % 86400) / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const parts: string[] = [];
-  if (d) parts.push(`${d}d`);
-  if (d || h) parts.push(`${h}h`);
-  parts.push(`${pad(m)}m`, `${pad(s)}s`);
-  return parts.join(" ");
-}
-
-function formatOpensAt(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function loadSeen(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(SEEN_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
 }
 
 export default function DashboardPage() {
@@ -84,14 +48,41 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [liveEvent, setLiveEvent] = useState<AuctionEvent | null>(null);
   const [myResults, setMyResults] = useState<MyEventResults[]>([]);
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [registeredIds, setRegisteredIds] = useState<Set<string>>(new Set());
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState<string | null>(null);
-  // Ticks every second so the "opens in…" countdown stays live and flips to the
-  // enter button the moment the scheduled open time passes.
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [seen, setSeen] = useState<Set<string>>(() => loadSeen());
 
-  // A bidder joins the live auction: provision their participant on the server,
-  // then enter the auction room (the room hydrates from this session).
+  // Load the role-dependent data once we know the profile's roles.
+  const loadRoleData = useCallback((p: Profile) => {
+    if (p.roles.includes(BIDDER_ROLE)) {
+      EventsService.getLiveEvent().then((ev) => setLiveEvent(ev));
+      EventsService.listMyResults(p.id).then((r) => setMyResults(r));
+    }
+    if (p.roles.includes(BIDDER_ROLE) || p.roles.includes(WOTBLITZ_ROLE)) {
+      Promise.all([
+        CommunityEventsService.listEvents(),
+        CommunityEventsService.listMyRegisteredEventIds(),
+      ]).then(([all, mine]) => {
+        setEvents(all.filter((e) => e.kind === "event"));
+        setRegisteredIds(mine);
+      });
+    }
+  }, []);
+
+  // Re-load the profile (and its role-dependent data) after consent / linking,
+  // so a guest who just consented flips to their new WoT Blitz profile.
+  const refresh = useCallback(async () => {
+    const p = await AccountService.getMyProfile();
+    if (p) {
+      setProfile(p);
+      loadRoleData(p);
+    }
+  }, [loadRoleData]);
+
   const handleEnterAuction = async () => {
     setEntering(true);
     setEnterError(null);
@@ -117,20 +108,13 @@ export default function DashboardPage() {
         settled = true;
         setProfile(p);
         setLoading(false);
-        // Bidders need the live event (to join) and their past results.
-        if (p.role.toLowerCase() === BIDDER_ROLE) {
-          EventsService.getLiveEvent().then((ev) => setLiveEvent(ev));
-          EventsService.listMyResults(p.id).then((r) => setMyResults(r));
-        }
+        loadRoleData(p);
       } else {
         settled = true;
         router.replace("/login");
       }
     };
 
-    // Wait for Supabase to finish parsing the OAuth redirect before deciding.
-    // - session present (INITIAL_SESSION / SIGNED_IN) -> load the profile.
-    // - INITIAL_SESSION with no session -> genuinely signed out -> /login.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
@@ -147,16 +131,13 @@ export default function DashboardPage() {
       settled = true;
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, loadRoleData]);
 
-  // While an event is scheduled but not open yet: tick the countdown every
-  // second, and re-check the event every 15s so an early open by the admin
-  // (which pulls opens_at forward) flips us to the enter button on its own.
+  // Keep the auction countdown live and flip to the enter button when a
+  // scheduled auction opens (re-checking the event every 15s).
   useEffect(() => {
     const opensAtMs = liveEvent?.opensAt ? new Date(liveEvent.opensAt).getTime() : null;
-    if (liveEvent?.status !== "live" || opensAtMs === null || opensAtMs <= Date.now()) {
-      return;
-    }
+    if (liveEvent?.status !== "live" || opensAtMs === null || opensAtMs <= Date.now()) return;
     const tick = setInterval(() => setNowMs(Date.now()), 1000);
     const refetch = setInterval(() => {
       EventsService.getLiveEvent().then((ev) => {
@@ -169,6 +150,69 @@ export default function DashboardPage() {
     };
   }, [liveEvent]);
 
+  const roles = useMemo(() => profile?.roles ?? [], [profile]);
+  const hasAdmin = roles.includes("admin");
+  const hasBidder = roles.includes(BIDDER_ROLE);
+  const hasWotBlitz = roles.includes(WOTBLITZ_ROLE);
+  const isGuestOnly = !hasAdmin && !hasBidder && !hasWotBlitz;
+
+  // Events this member registered for + the ones open to their roles right now.
+  const myRegistrations = useMemo(
+    () => events.filter((e) => registeredIds.has(e.id)),
+    [events, registeredIds]
+  );
+  const openEventsForMe = useMemo(
+    () =>
+      events.filter(
+        (e) =>
+          e.visibleRoles.some((r) => roles.includes(r)) &&
+          registrationState(e.registrationOpensAt, e.registrationClosesAt) === "open"
+      ),
+    [events, roles]
+  );
+
+  // Notifications: a live auction (bidders) and any open event for the member.
+  const notices: (DashboardNotice & { tab: string })[] = useMemo(() => {
+    const out: (DashboardNotice & { tab: string })[] = [];
+    if (hasBidder && liveEvent && liveEvent.status === "live") {
+      out.push({
+        id: `auction:${liveEvent.id}`,
+        kind: "auction",
+        title: liveEvent.name,
+        detail: "A live auction is open",
+        tab: "auctions",
+      });
+    }
+    for (const e of openEventsForMe) {
+      out.push({
+        id: `event:${e.id}`,
+        kind: "event",
+        title: e.title,
+        detail: "Registration is open",
+        tab: "events",
+      });
+    }
+    return out;
+  }, [hasBidder, liveEvent, openEventsForMe]);
+
+  const unseenNotices = notices.filter((n) => !seen.has(n.id));
+
+  const markTabSeen = useCallback(
+    (tab: string) => {
+      const ids = notices.filter((n) => n.tab === tab && !seen.has(n.id)).map((n) => n.id);
+      if (ids.length === 0) return;
+      setSeen((prev) => {
+        const next = new Set(prev);
+        ids.forEach((i) => next.add(i));
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(SEEN_KEY, JSON.stringify(Array.from(next)));
+        }
+        return next;
+      });
+    },
+    [notices, seen]
+  );
+
   if (loading || !profile) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -180,21 +224,44 @@ export default function DashboardPage() {
     );
   }
 
-  // Excluded members never see the dashboard: a full-screen lock replaces it,
-  // re-applied on every load while the role stays. Check before anything else.
-  if (profile.role.toLowerCase() === EXCLUDED_ROLE) {
+  // Excluded members never see the dashboard.
+  if (roles.includes(EXCLUDED_ROLE)) {
     return <ExcludedScreen />;
   }
 
-  const role = roleStyle(profile.role);
-  const isGuest = profile.role.toLowerCase() === DEFAULT_ACCOUNT_ROLE;
-  const isBidder = profile.role.toLowerCase() === BIDDER_ROLE;
-  const isAdmin = profile.role.toLowerCase() === "admin";
   const memberSince = new Date(profile.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+
+  // Sections (tabs). Welcome stays leftmost (secondary once a game is chosen);
+  // Profile is primary for WoT Blitz members.
+  const navItems: MemberNavItem[] = [
+    { id: "welcome", label: "Welcome" },
+    ...(hasWotBlitz ? [{ id: "profile", label: "Profile" }] : []),
+    ...(hasBidder
+      ? [
+          { id: "auctions", label: "Auctions", dot: unseenNotices.some((n) => n.tab === "auctions") },
+          { id: "results", label: "Results" },
+        ]
+      : []),
+    ...(hasWotBlitz || hasBidder
+      ? [
+          { id: "events", label: "Events", dot: unseenNotices.some((n) => n.tab === "events") },
+          { id: "tournaments", label: "Tournaments" },
+        ]
+      : []),
+    { id: "contact", label: "Contact" },
+  ];
+
+  const defaultSection = hasWotBlitz ? "profile" : hasBidder ? "auctions" : "welcome";
+  const active = activeSection ?? defaultSection;
+
+  const selectSection = (id: string) => {
+    setActiveSection(id);
+    markTabSeen(id);
+  };
 
   return (
     <main className="relative min-h-screen px-4 py-6 sm:px-6 sm:py-8">
@@ -208,50 +275,44 @@ export default function DashboardPage() {
             <Logo className="h-9 w-9" />
             <span className="text-sm font-semibold tracking-wide">Auction App</span>
           </Link>
-
           <AccountMenu />
         </div>
 
-        {/* Hero */}
+        {/* Identity header */}
         <div className="mt-8 flex animate-fade-up flex-col items-center gap-4 text-center sm:mt-10">
-          <AccountAvatar
-            avatarUrl={profile.avatarUrl}
-            name={profile.username}
-            size={88}
-          />
+          <AccountAvatar avatarUrl={profile.avatarUrl} name={profile.username} size={88} />
           <div>
             <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-4xl">
               Welcome, {profile.username}
             </h1>
-            <div className="mt-3 flex items-center justify-center gap-2">
-              <span
-                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ring-1 ${role.chip}`}
-              >
-                {role.label}
-              </span>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              {profile.roles.map((r) => {
+                const meta = roleMeta(r);
+                return (
+                  <span
+                    key={r}
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ring-1 ${meta.chip}`}
+                  >
+                    {meta.label}
+                  </span>
+                );
+              })}
               <span className="text-xs text-zinc-500">Member since {memberSince}</span>
             </div>
           </div>
         </div>
 
-        {/* Admin: shortcut into the admin control center. */}
-        {isAdmin && (
-          <div className="mt-8 animate-fade-up rounded-2xl bg-fuchsia-400/10 p-5 ring-1 ring-fuchsia-400/25 sm:mt-10">
+        {/* Admin shortcut */}
+        {hasAdmin && (
+          <div className="mt-6 animate-fade-up rounded-2xl bg-fuchsia-400/10 p-5 ring-1 ring-fuchsia-400/25">
             <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
               <div>
-                <p className="text-xs uppercase tracking-wide text-fuchsia-200/80">
-                  Admin access
-                </p>
-                <p className="text-lg font-extrabold text-fuchsia-100">
-                  You have admin rights
-                </p>
-                <p className="mt-1 text-xs text-fuchsia-200/80">
-                  Manage members, roles, events and the live auction room.
-                </p>
+                <p className="text-xs uppercase tracking-wide text-fuchsia-200/80">Admin access</p>
+                <p className="text-lg font-extrabold text-fuchsia-100">You have admin rights</p>
               </div>
               <Link
                 href="/admin"
-                className="w-full shrink-0 rounded-2xl bg-fuchsia-500/20 px-6 py-3 text-center text-sm font-bold text-fuchsia-100 ring-1 ring-fuchsia-400/30 transition hover:bg-fuchsia-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400/60 sm:w-auto"
+                className="w-full shrink-0 rounded-2xl bg-fuchsia-500/20 px-6 py-3 text-center text-sm font-bold text-fuchsia-100 ring-1 ring-fuchsia-400/30 transition hover:bg-fuchsia-500/30 active:scale-[0.98] sm:w-auto"
               >
                 Open admin dashboard →
               </Link>
@@ -259,260 +320,59 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Bidder: enter the live auction (only once the event has opened) */}
-        {isBidder &&
-          (() => {
-            const opensAtMs = liveEvent?.opensAt
-              ? new Date(liveEvent.opensAt).getTime()
-              : null;
-            const isLive = liveEvent?.status === "live";
-            const scheduled = isLive && opensAtMs !== null && opensAtMs > nowMs;
-            const openNow = isLive && !scheduled;
+        {/* Section navbar */}
+        <div className="mt-6 animate-fade-up sm:mt-8">
+          <MemberNav items={navItems} active={active} onSelect={selectSection} />
+        </div>
 
-            // Scheduled but not open yet: show the countdown + the open time.
-            if (scheduled && liveEvent) {
-              return (
-                <div className="mt-8 animate-fade-up rounded-2xl bg-amber-400/10 p-5 ring-1 ring-amber-400/25 sm:mt-10">
-                  <div className="text-center">
-                    <p className="text-xs uppercase tracking-wide text-amber-200/80">
-                      Upcoming event
-                    </p>
-                    <p className="text-lg font-extrabold text-amber-100">{liveEvent.name}</p>
-                    <p className="mt-3 text-xs uppercase tracking-wide text-amber-200/70">
-                      Opens in
-                    </p>
-                    <p className="mt-1 text-3xl font-extrabold tabular-nums text-amber-100 sm:text-4xl">
-                      {formatCountdown(opensAtMs! - nowMs)}
-                    </p>
-                    <p className="mt-2 text-xs text-amber-200/80">
-                      Opens {formatOpensAt(liveEvent.opensAt!)} — the enter button appears here
-                      automatically.
-                    </p>
-                  </div>
-                </div>
-              );
-            }
+        {/* Active section */}
+        <div className="mt-6 animate-fade-up">
+          {active === "welcome" && (
+            <WelcomeSection profile={profile} memberSince={memberSince} onConsented={refresh} />
+          )}
 
-            // Open: the normal enter card.
-            if (openNow && liveEvent) {
-              return (
-                <div className="mt-8 animate-fade-up rounded-2xl bg-emerald-400/10 p-5 ring-1 ring-emerald-400/25 sm:mt-10">
-                  <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-emerald-200/80">
-                        Live event
-                      </p>
-                      <p className="text-lg font-extrabold text-emerald-100">{liveEvent.name}</p>
-                      <p className="mt-1 text-xs text-emerald-200/80">
-                        Take {liveEvent.playerLimit} players · budget $
-                        {liveEvent.totalReserve.toLocaleString()} (reserve applied automatically).
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleEnterAuction}
-                      disabled={entering}
-                      className="w-full shrink-0 rounded-2xl bg-emerald-500/20 px-6 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:opacity-60 sm:w-auto"
-                    >
-                      {entering ? "Joining…" : `Enter ${liveEvent.name} →`}
-                    </button>
-                  </div>
-                  {enterError && (
-                    <p className="mt-3 text-center text-xs font-semibold text-red-200">
-                      {enterError}
-                    </p>
-                  )}
-                </div>
-              );
-            }
+          {active === "profile" && hasWotBlitz && (
+            <ProfileSection
+              profile={profile}
+              registrations={myRegistrations}
+              notices={hasBidder ? unseenNotices : []}
+              onRefresh={refresh}
+            />
+          )}
 
-            // No live event, or it has closed.
-            return (
-              <div className="mt-8 animate-fade-up rounded-2xl bg-white/5 p-5 ring-1 ring-white/10 sm:mt-10">
-                <p className="text-center text-sm font-semibold text-zinc-200">
-                  You&apos;re approved to bid.
-                </p>
-                <p className="mt-1 text-center text-xs text-zinc-500">
-                  {liveEvent && liveEvent.status === "finished"
-                    ? `“${liveEvent.name}” has closed. Your results are below. The next event will appear here when the admin opens one.`
-                    : "There’s no live auction event yet. The button to enter the room will appear here as soon as the admin creates one."}
-                </p>
-              </div>
-            );
-          })()}
+          {active === "auctions" && hasBidder && (
+            <AuctionsSection
+              liveEvent={liveEvent}
+              nowMs={nowMs}
+              entering={entering}
+              enterError={enterError}
+              onEnter={handleEnterAuction}
+            />
+          )}
 
-        {/* Bidder: my results across events */}
-        {isBidder && myResults.length > 0 && (
-          <section className="mt-8 animate-fade-up sm:mt-10">
-            <h2 className="text-lg font-extrabold text-zinc-100 sm:text-xl">My results</h2>
-            <p className="mt-1 text-xs text-zinc-500">
-              Players you took by bidding, and any received through the random distribution.
-            </p>
-            <div className="mt-4 space-y-4">
-              {myResults.map((ev) => {
-                const won = ev.results.filter((r) => !r.viaRandom);
-                const random = ev.results.filter((r) => r.viaRandom);
-                const spent = won.reduce((s, r) => s + r.amount, 0);
-                return (
-                  <div
-                    key={ev.eventId}
-                    className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10"
-                  >
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-extrabold text-zinc-100">{ev.eventName}</span>
-                      <span className="flex items-center gap-2">
-                        {ev.status === "finished" && (
-                          <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-400/25">
-                            Closed
-                          </span>
-                        )}
-                        <span className="text-xs text-zinc-400">
-                          {ev.results.length} players · ${spent.toLocaleString()} spent
-                        </span>
-                      </span>
-                    </div>
+          {active === "results" && hasBidder && <ResultsSection results={myResults} />}
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-emerald-200/80">
-                          Won by bidding ({won.length})
-                        </p>
-                        {won.length === 0 ? (
-                          <p className="text-xs text-zinc-500">None.</p>
-                        ) : (
-                          <ul className="space-y-1">
-                            {won.map((r) => (
-                              <li
-                                key={r.playerId}
-                                className="flex items-center justify-between gap-2 rounded-lg bg-black/25 px-3 py-1.5 text-sm ring-1 ring-white/10"
-                              >
-                                <span className="min-w-0 flex-1 truncate text-zinc-200">
-                                  {r.playerName}
-                                </span>
-                                <span className="shrink-0 tabular-nums text-zinc-400">
-                                  ${r.amount.toLocaleString()}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
+          {active === "events" && (hasWotBlitz || hasBidder) && (
+            <MemberEvents roles={profile.roles} onChanged={refresh} />
+          )}
 
-                      <div>
-                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-fuchsia-200/80">
-                          Received random ({random.length})
-                        </p>
-                        {random.length === 0 ? (
-                          <p className="text-xs text-zinc-500">None.</p>
-                        ) : (
-                          <ul className="space-y-1">
-                            {random.map((r) => (
-                              <li
-                                key={r.playerId}
-                                className="flex items-center justify-between gap-2 rounded-lg bg-black/25 px-3 py-1.5 text-sm ring-1 ring-white/10"
-                              >
-                                <span className="min-w-0 flex-1 truncate text-zinc-200">
-                                  {r.playerName}
-                                </span>
-                                <span className="shrink-0 text-xs font-semibold text-fuchsia-200">
-                                  Free
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+          {active === "tournaments" && (hasWotBlitz || hasBidder) && (
+            <ComingSoonSection
+              icon="🏆"
+              title="Tournaments"
+              description="Brackets, fixtures and live tournament tracking are on the way. Register for events in the Events tab in the meantime."
+              bullets={["Seeded brackets", "Match schedules", "Live standings", "Prize tracking"]}
+            />
+          )}
 
-        {/* Community events open to this member's role. */}
-        <MemberEvents role={profile.role} />
-
-        {/* Pending-role notice for fresh accounts */}
-        {isGuest && (
-          <div className="mt-8 animate-fade-up rounded-2xl bg-amber-400/10 p-4 ring-1 ring-amber-400/25 sm:mt-10">
-            <p className="text-center text-sm text-amber-100">
-              Your account is set up! You currently have the{" "}
-              <span className="font-semibold">Guest</span> role. An admin will assign
-              your full role soon — new features will unlock here once that happens.
-            </p>
-          </div>
-        )}
-
-        {/* Cards */}
-        <div className="mt-6 grid animate-fade-up gap-5 sm:mt-8 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Account details */}
-          <GradientCard className="p-6">
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-              Account
-            </div>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-zinc-400">Username</dt>
-                <dd className="truncate font-semibold text-zinc-100">
-                  {profile.username}
-                </dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-zinc-400">Role</dt>
-                <dd className="font-semibold text-zinc-100">{role.label}</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-zinc-400">Signed in via</dt>
-                <dd className="font-semibold text-zinc-100">Discord</dd>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-zinc-400">Member since</dt>
-                <dd className="font-semibold text-zinc-100">{memberSince}</dd>
-              </div>
-            </dl>
-          </GradientCard>
-
-          {/* Quick links */}
-          <GradientCard className="p-6">
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-              Explore
-            </div>
-            <div className="mt-4 flex flex-col gap-2 text-sm">
-              <Link
-                href="/tournaments"
-                className="rounded-xl bg-white/5 px-3 py-2.5 font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
-              >
-                Tournaments
-              </Link>
-              <Link
-                href="/spectator"
-                className="rounded-xl bg-white/5 px-3 py-2.5 font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
-              >
-                Watch as spectator
-              </Link>
-              <Link
-                href="/rules"
-                className="rounded-xl bg-white/5 px-3 py-2.5 font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
-              >
-                Rules
-              </Link>
-            </div>
-          </GradientCard>
-
-          {/* Coming soon */}
-          <GradientCard className="p-6">
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">
-              Coming soon
-            </div>
-            <p className="mt-4 text-sm text-zinc-400">
-              Member features are on the way — personal stats, saved squads and
-              tournament entries will appear here as we roll them out.
-            </p>
-            <span className="mt-4 inline-flex items-center rounded-full bg-white/5 px-3 py-1 text-xs text-zinc-400 ring-1 ring-white/10">
-              In development
-            </span>
-          </GradientCard>
+          {active === "contact" && (
+            <ComingSoonSection
+              icon="💬"
+              title="Contact & Support"
+              description="A place to reach the admins for help, report an issue or ask about an event. This is being built — for now, reach out on Discord."
+              bullets={["Support tickets", "FAQ & guides", "Report a problem", "Event questions"]}
+            />
+          )}
         </div>
       </div>
     </main>

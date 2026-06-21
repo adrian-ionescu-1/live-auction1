@@ -316,7 +316,7 @@ export default function CreateEventPage() {
     Promise.all([MembersService.getAllMembers(), AuctionEngine.loadPlayers()]).then(
       ([members, ps]) => {
         if (!active) return;
-        setBidders(members.filter((m) => m.role.toLowerCase() === "bidder"));
+        setBidders(members.filter((m) => m.roles.includes("bidder")));
         setPlayers(ps);
         setLoading(false);
       }
