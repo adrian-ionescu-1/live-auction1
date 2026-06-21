@@ -33,6 +33,9 @@ export default function AdminMembersPage() {
   const updateMember = (updated: Member) =>
     setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
 
+  const removeMember = (memberId: string) =>
+    setMembers((prev) => prev.filter((m) => m.id !== memberId));
+
   const groups = useMemo(() => {
     const byRole = new Map<string, Member[]>();
     for (const m of members) {
@@ -121,7 +124,12 @@ export default function AdminMembersPage() {
                 <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {group.members.map((m) => (
                     <li key={m.id}>
-                      <MemberActions member={m} mode="all" onChange={updateMember}>
+                      <MemberActions
+                        member={m}
+                        mode="all"
+                        onChange={updateMember}
+                        onDelete={removeMember}
+                      >
                         <MemberRow member={m} online={onlineIds.has(m.id)} interactive />
                       </MemberActions>
                     </li>
