@@ -9,7 +9,7 @@ export interface Profile {
   avatarUrl: string | null;
   /**
    * Free-text role. Every new account starts as 'guest' and an admin promotes
-   * it manually (e.g. to 'prime'). Kept as a string so admins can introduce new
+   * it manually (e.g. to 'bidder'). Kept as a string so admins can introduce new
    * roles without a code change.
    */
   role: string;
