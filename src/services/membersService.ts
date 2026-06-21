@@ -77,6 +77,27 @@ export class MembersService {
   }
 
   /**
+   * Admin: permanently delete a member (removes them from the directory and
+   * clears their role). If they sign in with Discord again they come back as a
+   * brand-new 'guest'. Returns true on success.
+   */
+  static async deleteMember(memberId: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc("admin_delete_member", {
+      p_member_id: memberId,
+    });
+    if (error) {
+      console.error("Error deleting member:", error);
+      return false;
+    }
+    // The RPC returns { success, error } — treat an explicit failure as false.
+    if (data && typeof data === "object" && data.success === false) {
+      console.error("Error deleting member:", data.error);
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Admin: set a member's display name, or reset it (pass null/empty) back to
    * their original Discord name. Also syncs the live auction participant.
    */

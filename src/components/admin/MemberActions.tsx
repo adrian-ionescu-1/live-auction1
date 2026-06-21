@@ -9,16 +9,20 @@ import { Member } from "@/types/account.types";
 import { MembersService } from "@/services/membersService";
 import { ASSIGNABLE_ROLES, roleMeta } from "./roleMeta";
 import GrantAdminDialog from "./GrantAdminDialog";
+import ConfirmActionDialog from "./ConfirmActionDialog";
 
 export default function MemberActions({
   member,
   mode = "all",
   onChange,
+  onDelete,
   children,
 }: {
   member: Member;
   mode?: "roles" | "ban" | "all";
   onChange: (member: Member) => void;
+  /** When provided, a "Delete member" action is offered (permanent removal). */
+  onDelete?: (memberId: string) => void;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -27,6 +31,8 @@ export default function MemberActions({
   // Granting Admin is gated behind the two-step danger dialog instead of being
   // applied on click like every other role.
   const [confirmAdmin, setConfirmAdmin] = useState(false);
+  // Deleting a member needs one plain "are you sure?" confirmation.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   // Reset the editable name to the current one each time the popover opens.
@@ -78,6 +84,18 @@ export default function MemberActions({
     if (ok) {
       onChange({ ...member, role: "admin" });
       setConfirmAdmin(false);
+      setOpen(false);
+    }
+  };
+
+  // Permanently delete the member after the single confirmation.
+  const confirmDeleteMember = async () => {
+    setBusy(true);
+    const ok = await MembersService.deleteMember(member.id);
+    setBusy(false);
+    if (ok) {
+      onDelete?.(member.id);
+      setConfirmDelete(false);
       setOpen(false);
     }
   };
@@ -233,6 +251,35 @@ export default function MemberActions({
               </button>
             </div>
           )}
+
+          {onDelete && (
+            <div className="border-t border-white/10 p-1.5">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={busy}
+                onClick={() => setConfirmDelete(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/15 hover:text-red-200 disabled:opacity-50"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                </svg>
+                Delete member
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -242,6 +289,24 @@ export default function MemberActions({
         busy={busy}
         onConfirm={confirmGrantAdmin}
         onCancel={() => setConfirmAdmin(false)}
+      />
+
+      <ConfirmActionDialog
+        title="Delete member?"
+        description={
+          <>
+            This permanently removes{" "}
+            <span className="font-semibold text-zinc-200">{member.username}</span> from
+            the members list and clears their role. If they sign in with Discord again
+            they come back as a brand-new Guest. This can&apos;t be undone.
+          </>
+        }
+        confirmLabel="Delete member"
+        tone="danger"
+        isOpen={confirmDelete}
+        busy={busy}
+        onConfirm={confirmDeleteMember}
+        onCancel={() => setConfirmDelete(false)}
       />
     </div>
   );
