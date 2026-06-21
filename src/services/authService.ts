@@ -1,4 +1,4 @@
-import { supabase, SupabaseAuthKey } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { User, UserRole } from '@/types/auction.types';
 
 // sessionStorage key holding the access-key admin's key after login. The admin
@@ -16,24 +16,26 @@ export class AuthService {
     }
 
     try {
-      // Check if key exists and is valid
-      const { data: authKey, error: keyError } = await supabase
-        .from('auth_keys')
-        .select('*')
-        .eq('key', key.trim())
-        .single();
-
-      if (keyError || !authKey) {
-        return { success: false, error: 'Invalid key' };
+      // The login (validate the key, reuse/create the admin participant, mark the
+      // key used) runs server-side in the key_login SECURITY DEFINER RPC, so the
+      // anon client no longer writes auth_keys / users directly (RLS hardening).
+      const { data, error } = await supabase.rpc('key_login', { p_key: key.trim() });
+      if (error) {
+        console.error('Authentication error:', error);
+        return { success: false, error: 'Authentication failed' };
       }
 
-      const typedAuthKey = authKey as SupabaseAuthKey;
+      const result = (data ?? {}) as {
+        success?: boolean;
+        error?: string;
+        user_id?: string;
+        username?: string;
+        balance?: number;
+        role?: string;
+      };
 
-      // Access keys are now admin-only. Bidders sign in with Discord; only the
-      // admin still uses a key. Reject any non-admin key defensively, even if a
-      // stray one survived the cleanup migration.
-      if (typedAuthKey.role !== 'ADMIN') {
-        return { success: false, error: 'Access keys are for admins only. Bidders sign in with Discord.' };
+      if (!result.success || !result.user_id) {
+        return { success: false, error: result.error ?? 'Authentication failed' };
       }
 
       // Keep the key so the guarded admin RPCs can prove this anonymous caller
@@ -42,67 +44,11 @@ export class AuthService {
         sessionStorage.setItem(ADMIN_KEY_STORAGE, key.trim());
       }
 
-      // MODIFICATION: Check if user already exists with this key
-      const { data: existingUser, error: existingUserError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', typedAuthKey.user_name)
-        .maybeSingle();
-
-      // If user already exists, return the existing user (reusable login)
-      if (existingUser && !existingUserError) {
-        const user: User = {
-          id: existingUser.id,
-          username: existingUser.username,
-          balance: existingUser.balance,
-          role: existingUser.role as UserRole,
-          wonPlayers: [],
-        };
-
-        // Update the used_at timestamp to track last login
-        await supabase
-          .from('auth_keys')
-          .update({ 
-            used: true, 
-            used_at: new Date().toISOString() 
-          })
-          .eq('id', typedAuthKey.id);
-
-        return { success: true, user };
-      }
-
-      // Admin key with no user row yet — create the admin participant (no budget;
-      // admins don't bid). Only ADMIN keys reach here (guarded above).
-      const { data: newUser, error: userError } = await supabase
-        .from('users')
-        .insert({
-          username: typedAuthKey.user_name,
-          balance: 0,
-          role: typedAuthKey.role,
-          auth_key_id: typedAuthKey.id,
-        })
-        .select()
-        .single();
-
-      if (userError || !newUser) {
-        console.error('Error creating user:', userError);
-        return { success: false, error: 'Failed to create user account' };
-      }
-
-      // Mark key as used (but it's still reusable)
-      await supabase
-        .from('auth_keys')
-        .update({ 
-          used: true, 
-          used_at: new Date().toISOString() 
-        })
-        .eq('id', typedAuthKey.id);
-
       const user: User = {
-        id: newUser.id,
-        username: newUser.username,
-        balance: newUser.balance,
-        role: newUser.role as UserRole,
+        id: result.user_id,
+        username: result.username ?? 'Admin',
+        balance: result.balance ?? 0,
+        role: (result.role as UserRole) ?? 'ADMIN',
         wonPlayers: [],
       };
 

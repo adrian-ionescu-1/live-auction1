@@ -178,47 +178,6 @@ export class AuctionEngine {
     return true;
   }
 
-  static async updateUserBalance(userId: string, newBalance: number): Promise<boolean> {
-    try {
-      const { error } = await supabase.from('users').update({ balance: newBalance }).eq('id', userId);
-
-      if (error) {
-        console.error('Error updating balance:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in updateUserBalance:', error);
-      return false;
-    }
-  }
-
-  // Optional legacy helper (kept for compatibility). Bids should normally be placed via RPC.
-  static async saveBid(playerId: string, userId: string, amount: number): Promise<string | null> {
-    try {
-      const { data, error } = await supabase
-        .from('bids')
-        .insert({
-          player_id: playerId,
-          user_id: userId,
-          amount: amount,
-        })
-        .select('id')
-        .single();
-
-      if (error) {
-        console.error('Error saving bid:', error);
-        return null;
-      }
-
-      return data?.id || null;
-    } catch (error) {
-      console.error('Error in saveBid:', error);
-      return null;
-    }
-  }
-
   static async getAuctionState(): Promise<any> {
     try {
       const { data, error } = await supabase.from('auction_state').select('*').limit(1).single();
@@ -232,31 +191,6 @@ export class AuctionEngine {
     } catch (error) {
       console.error('Error in getAuctionState:', error);
       return null;
-    }
-  }
-
-  static async updateAuctionState(updates: any): Promise<boolean> {
-    try {
-      const state = await this.getAuctionState();
-      if (!state) {
-        console.error('No auction state found to update');
-        return false;
-      }
-
-      const { error } = await supabase
-        .from('auction_state')
-        .update({ ...updates, updated_at: new Date().toISOString() })
-        .eq('id', state.id);
-
-      if (error) {
-        console.error('Error updating auction state:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error in updateAuctionState:', error);
-      return false;
     }
   }
 
