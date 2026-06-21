@@ -4,7 +4,16 @@
 
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import {
+  CSSProperties,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { Member } from "@/types/account.types";
 import { MembersService } from "@/services/membersService";
 import { ASSIGNABLE_ROLES, roleMeta } from "./roleMeta";
@@ -33,17 +42,70 @@ export default function MemberActions({
   const [confirmAdmin, setConfirmAdmin] = useState(false);
   // Deleting a member needs one plain "are you sure?" confirmation.
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // The popover is portaled to <body> and positioned with fixed coordinates, so
+  // it can never be clipped by the row, the card grid, or the footer. We compute
+  // those coordinates from the trigger's on-screen rect.
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+  const [placeBelow, setPlaceBelow] = useState(true);
+  // Only portal after mount so document.body exists (SSR-safe), same as the
+  // admin dialogs.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Reset the editable name to the current one each time the popover opens.
   useEffect(() => {
     if (open) setNameInput(member.username);
   }, [open, member.username]);
 
+  // Anchor the fixed popover to the trigger: align right edges, flip above when
+  // there's more room up top, and cap its height to the free space so a tall
+  // menu (more roles later) scrolls inside itself instead of running off-screen.
+  const positionMenu = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 8; // keep clear of the viewport edges
+    const gap = 6; // breathing room between trigger and menu
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const width = Math.min(256, vw - margin * 2);
+    let left = rect.right - width; // mirror the old right-aligned popover
+    left = Math.max(margin, Math.min(left, vw - width - margin));
+    const spaceBelow = vh - rect.bottom - gap - margin;
+    const spaceAbove = rect.top - gap - margin;
+    const below = spaceBelow >= spaceAbove;
+    const maxHeight = Math.max(140, below ? spaceBelow : spaceAbove);
+    setPlaceBelow(below);
+    setMenuStyle(
+      below
+        ? { position: "fixed", top: rect.bottom + gap, left, width, maxHeight }
+        : { position: "fixed", bottom: vh - rect.top + gap, left, width, maxHeight },
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    positionMenu();
+    // Re-anchor while the page scrolls or the viewport resizes (capture catches
+    // scrolling ancestors, not just the window).
+    window.addEventListener("scroll", positionMenu, true);
+    window.addEventListener("resize", positionMenu);
+    return () => {
+      window.removeEventListener("scroll", positionMenu, true);
+      window.removeEventListener("resize", positionMenu);
+    };
+  }, [open, positionMenu]);
+
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      // The menu lives in a portal, so check both it and the trigger.
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -143,8 +205,9 @@ export default function MemberActions({
   const showBan = mode === "ban" || mode === "all";
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
@@ -154,11 +217,16 @@ export default function MemberActions({
         {children}
       </button>
 
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 z-50 mt-1 w-64 origin-top-right animate-scale-in overflow-hidden rounded-2xl bg-zinc-900/95 ring-1 ring-white/10 shadow-2xl backdrop-blur"
-        >
+      {open && mounted &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            style={menuStyle}
+            className={`z-[90] overflow-y-auto overscroll-contain rounded-2xl bg-zinc-900/95 ring-1 ring-white/10 shadow-2xl backdrop-blur animate-scale-in ${
+              placeBelow ? "origin-top-right" : "origin-bottom-right"
+            }`}
+          >
           {/* Display name: rename or reset to the original Discord name. */}
           <div className={`p-1.5 ${showRoles || showBan ? "border-b border-white/10" : ""}`}>
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">
@@ -280,8 +348,9 @@ export default function MemberActions({
               </button>
             </div>
           )}
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
       <GrantAdminDialog
         memberName={member.username}
