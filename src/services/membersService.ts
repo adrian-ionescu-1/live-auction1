@@ -17,7 +17,7 @@ export class MembersService {
   static async getAllMembers(): Promise<Member[]> {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, username, display_name, avatar_url, role, banned")
+      .select("id, username, display_name, avatar_url, role, roles, banned")
       .order("username", { ascending: true });
 
     if (error) {
@@ -32,6 +32,7 @@ export class MembersService {
         display_name: string | null;
         avatar_url: string | null;
         role: string;
+        roles: string[] | null;
         banned: boolean | null;
       };
       const original = r.username ?? "guest";
@@ -43,12 +44,16 @@ export class MembersService {
         displayName,
         avatarUrl: r.avatar_url,
         role: r.role,
+        roles:
+          Array.isArray(r.roles) && r.roles.length > 0
+            ? r.roles.map((x) => x.toLowerCase())
+            : [r.role.toLowerCase()],
         banned: !!r.banned,
       };
     });
   }
 
-  /** Admin: change a member's role. Returns true on success. */
+  /** Admin: replace a member's roles with a single one. Returns true on success. */
   static async setRole(memberId: string, role: string): Promise<boolean> {
     const { error } = await supabase.rpc("admin_set_member_role", {
       p_member_id: memberId,
@@ -57,6 +62,34 @@ export class MembersService {
     });
     if (error) {
       console.error("Error updating member role:", error);
+      return false;
+    }
+    return true;
+  }
+
+  /** Admin: grant one role to a member, keeping the others. */
+  static async addRole(memberId: string, role: string): Promise<boolean> {
+    const { error } = await supabase.rpc("admin_add_member_role", {
+      p_member_id: memberId,
+      p_role: role,
+      p_admin_key: adminKey(),
+    });
+    if (error) {
+      console.error("Error adding member role:", error);
+      return false;
+    }
+    return true;
+  }
+
+  /** Admin: revoke one role from a member (empty set falls back to guest). */
+  static async removeRole(memberId: string, role: string): Promise<boolean> {
+    const { error } = await supabase.rpc("admin_remove_member_role", {
+      p_member_id: memberId,
+      p_role: role,
+      p_admin_key: adminKey(),
+    });
+    if (error) {
+      console.error("Error removing member role:", error);
       return false;
     }
     return true;

@@ -206,7 +206,7 @@ export default function AdminOverviewPage() {
   }, []);
 
   const onlineCount = members.filter((m) => onlineIds.has(m.id)).length;
-  const bidderCount = members.filter((m) => m.role.toLowerCase() === "bidder").length;
+  const bidderCount = members.filter((m) => m.roles.includes("bidder")).length;
   const bannedCount = members.filter((m) => m.banned).length;
 
   return (

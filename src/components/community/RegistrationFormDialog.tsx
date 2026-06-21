@@ -26,6 +26,7 @@ export default function RegistrationFormDialog({
   initialValues,
   region = null,
   initialBlitz = null,
+  requireConsent = false,
   onSubmit,
   onCancel,
 }: {
@@ -42,6 +43,8 @@ export default function RegistrationFormDialog({
   /** When set, the event requires validating a real Blitz account on this region. */
   region?: BlitzRegion | null;
   initialBlitz?: ValidatedPlayer | null;
+  /** Member self-registration: require a "details correct + accept terms" tick. */
+  requireConsent?: boolean;
   onSubmit: (result: {
     displayName: string;
     values: Record<string, string>;
@@ -52,6 +55,7 @@ export default function RegistrationFormDialog({
   const [name, setName] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [validated, setValidated] = useState<ValidatedPlayer | null>(null);
+  const [consent, setConsent] = useState(false);
   const [touched, setTouched] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -61,6 +65,7 @@ export default function RegistrationFormDialog({
     setName(initialName);
     setValues(initialValues ? { ...initialValues } : {});
     setValidated(initialBlitz);
+    setConsent(false);
     setTouched(false);
   }, [isOpen, initialName, initialValues, initialBlitz]);
 
@@ -84,7 +89,8 @@ export default function RegistrationFormDialog({
   // name field is hidden and not required.
   const showName = showNameField && !blitzRequired;
   const nameMissing = showName && !name.trim();
-  const canSubmit = !missingRequired && !nameMissing && !blitzMissing && !busy;
+  const consentMissing = requireConsent && !consent;
+  const canSubmit = !missingRequired && !nameMissing && !blitzMissing && !consentMissing && !busy;
 
   const submit = () => {
     setTouched(true);
@@ -173,6 +179,31 @@ export default function RegistrationFormDialog({
               );
             })}
           </div>
+
+          {requireConsent && (
+            <div className="mt-4 rounded-2xl bg-amber-400/10 p-3.5 ring-1 ring-amber-400/25">
+              <p className="text-xs leading-relaxed text-amber-100/90">
+                Double-check your details are correct and that this is your own account — the admin
+                uses exactly what you submit here.
+              </p>
+              <label className="mt-2.5 flex cursor-pointer items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  className="mt-0.5 h-5 w-5 shrink-0 accent-amber-500"
+                />
+                <span className="text-sm font-semibold text-amber-50">
+                  My details are correct and I agree to the event&apos;s terms and conditions.
+                </span>
+              </label>
+              {touched && consentMissing && (
+                <span className="mt-1 block text-xs font-semibold text-amber-200">
+                  Please confirm to continue.
+                </span>
+              )}
+            </div>
+          )}
 
           {error && <p className="mt-3 text-sm font-semibold text-red-200">{error}</p>}
 

@@ -383,4 +383,12 @@ export class CommunityEventsService {
     });
     return unwrap(data, error);
   }
+
+  /** Member self-withdrawal: cancel their own registration (window must be open). */
+  static async withdraw(eventId: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("withdraw_from_community_event", {
+      p_event_id: eventId,
+    });
+    return unwrap(data, error);
+  }
 }

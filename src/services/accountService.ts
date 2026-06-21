@@ -1,5 +1,29 @@
 import { supabase, SupabaseProfile } from "@/lib/supabase";
-import { Profile, DEFAULT_ACCOUNT_ROLE } from "@/types/account.types";
+import { BlitzLink, Profile, DEFAULT_ACCOUNT_ROLE } from "@/types/account.types";
+import { BlitzAccountDetails } from "@/types/blitz.types";
+import { BlitzRegion } from "@/types/community-event.types";
+
+// Rebuild a member's linked Blitz account from the stored profile columns.
+function blitzLinkFromProfile(p: SupabaseProfile): BlitzLink | null {
+  const region = p.blitz_region;
+  if (
+    (region !== "eu" && region !== "na" && region !== "asia") ||
+    p.blitz_account_id == null ||
+    !p.blitz_nickname
+  ) {
+    return null;
+  }
+  const details =
+    p.blitz_stats && typeof p.blitz_stats === "object"
+      ? (p.blitz_stats as BlitzAccountDetails)
+      : null;
+  return {
+    region: region as BlitzRegion,
+    accountId: Number(p.blitz_account_id),
+    nickname: p.blitz_nickname,
+    details,
+  };
+}
 
 // Account (Discord) auth service. This is built on Supabase Auth's native
 // Discord OAuth provider and is completely separate from the access-key login
@@ -67,7 +91,10 @@ export class AccountService {
         "guest",
       avatarUrl: (meta.avatar_url as string) ?? null,
       role: DEFAULT_ACCOUNT_ROLE,
+      roles: [DEFAULT_ACCOUNT_ROLE],
       createdAt: user.created_at ?? new Date().toISOString(),
+      wotblitzConsentedAt: null,
+      blitz: null,
     };
 
     const { data, error } = await supabase
@@ -95,7 +122,55 @@ export class AccountService {
       username: profile.display_name ?? profile.username ?? fallback.username,
       avatarUrl: profile.avatar_url ?? fallback.avatarUrl,
       role: profile.role,
+      roles:
+        Array.isArray(profile.roles) && profile.roles.length > 0
+          ? profile.roles.map((r) => r.toLowerCase())
+          : [profile.role.toLowerCase()],
       createdAt: profile.created_at,
+      wotblitzConsentedAt: profile.wotblitz_consented_at ?? null,
+      blitz: blitzLinkFromProfile(profile),
     };
+  }
+
+  /**
+   * Consent to WoT Blitz. Promotes a guest to the 'wotblitz' role server-side
+   * (other roles are kept) and records the consent time. Returns the new role.
+   */
+  static async consentWotBlitz(): Promise<{
+    success: boolean;
+    role: string | null;
+    error: string | null;
+  }> {
+    const { data, error } = await supabase.rpc("consent_wotblitz");
+    if (error) return { success: false, role: null, error: error.message };
+    const d = (data ?? {}) as Record<string, unknown>;
+    return {
+      success: d.success === true,
+      role: (d.role as string) ?? null,
+      error: (d.error as string) ?? null,
+    };
+  }
+
+  /** Link (or re-link) the caller's own WoT Blitz account, caching its stats. */
+  static async setMyBlitzAccount(
+    details: BlitzAccountDetails
+  ): Promise<{ success: boolean; error: string | null }> {
+    const { data, error } = await supabase.rpc("set_my_blitz_account", {
+      p_region: details.region,
+      p_account_id: details.accountId,
+      p_nickname: details.nickname,
+      p_stats: details,
+    });
+    if (error) return { success: false, error: error.message };
+    const d = (data ?? {}) as Record<string, unknown>;
+    return { success: d.success === true, error: (d.error as string) ?? null };
+  }
+
+  /** Unlink the caller's WoT Blitz account. */
+  static async clearMyBlitzAccount(): Promise<{ success: boolean; error: string | null }> {
+    const { data, error } = await supabase.rpc("clear_my_blitz_account");
+    if (error) return { success: false, error: error.message };
+    const d = (data ?? {}) as Record<string, unknown>;
+    return { success: d.success === true, error: (d.error as string) ?? null };
   }
 }

@@ -83,9 +83,9 @@ export default function AdminMembersPage() {
         </span>
       </div>
       <p className="mb-4 text-xs text-zinc-500">
-        Tap a category to expand it, then tap a member to change their role or ban them.
-        Members with the <span className="font-semibold text-emerald-200">Bidder</span> role
-        are automatically enrolled in new events.
+        Tap a category to expand it, then tap a member to change their roles or ban them from
+        bidding. Members with the <span className="font-semibold text-emerald-200">Bidder</span>{" "}
+        role are automatically enrolled in new events.
       </p>
 
       {loading ? (
