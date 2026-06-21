@@ -13,7 +13,8 @@ import { AccountService } from "@/services/accountService";
 const ROLE_LABEL: Record<string, string> = {
   USER: "Participant",
   ADMIN: "Admin",
-  SPECTATOR: "Spectator",
+  // The watch-only auction seat used by streamers in the broadcast room.
+  SPECTATOR: "Streamer",
 };
 
 // sessionStorage keys caching the Discord identity so the card shows instantly

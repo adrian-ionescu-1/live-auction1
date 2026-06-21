@@ -94,10 +94,10 @@ export default function WelcomeSection({
               Tournaments
             </Link>
             <Link
-              href="/spectator"
+              href="/streamers"
               className="rounded-xl bg-white/5 px-3 py-2.5 font-medium text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
             >
-              Watch as spectator
+              Become a streamer
             </Link>
             <Link
               href="/rules"

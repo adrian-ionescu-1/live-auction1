@@ -9,7 +9,7 @@ export const TICKER = [
   "10 PICKS",
   "RE-AUCTION",
   "FAIR PLAY",
-  "SPECTATOR MODE",
+  "STREAMER BROADCAST",
   "WOT BLITZ",
 ];
 
@@ -142,7 +142,7 @@ export const FAQ_PREVIEW = [
     a: "They can reconnect and continue — auction state remains live for all users.",
   },
   {
-    q: "Can spectators watch the auction?",
-    a: "Yes — tournament organizers can share spectator access and rules.",
+    q: "Can people watch the auction live?",
+    a: "Yes — community members with the Streamer role broadcast the live draft on YouTube, Twitch or TikTok.",
   },
 ];

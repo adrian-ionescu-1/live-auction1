@@ -69,6 +69,22 @@ const config: Config = {
           "0%": { transform: "translateX(-150%) skewX(-12deg)" },
           "60%, 100%": { transform: "translateX(250%) skewX(-12deg)" },
         },
+        // Side-to-side "wave" drift for the ambient colour blobs behind the
+        // streamer broadcast room. Three variants (different paths + speeds) so
+        // the blobs never move in lockstep.
+        "wave-x": {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
+          "50%": { transform: "translate3d(72px,-18px,0) scale(1.12)" },
+        },
+        "wave-x-rev": {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
+          "50%": { transform: "translate3d(-72px,18px,0) scale(1.08)" },
+        },
+        "wave-x-slow": {
+          "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
+          "33%": { transform: "translate3d(-56px,12px,0) scale(1.06)" },
+          "66%": { transform: "translate3d(56px,-12px,0) scale(1.1)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.7s cubic-bezier(0.22,1,0.36,1) both",
@@ -83,6 +99,9 @@ const config: Config = {
         pop: "pop 0.45s cubic-bezier(0.22,1,0.36,1) both",
         aurora: "aurora 18s ease-in-out infinite",
         sheen: "sheen 4.5s ease-in-out infinite",
+        "wave-x": "wave-x 16s ease-in-out infinite",
+        "wave-x-rev": "wave-x-rev 20s ease-in-out infinite",
+        "wave-x-slow": "wave-x-slow 24s ease-in-out infinite",
       },
     },
   },

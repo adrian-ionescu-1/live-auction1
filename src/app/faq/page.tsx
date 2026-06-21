@@ -7,7 +7,7 @@ import { Badge, GlowLink, InfoCard, Divider } from "../_components/ui";
 export const metadata: Metadata = {
   title: "FAQ • Auction App",
   description:
-    "Quick answers for participants, organizers and spectators about bidding, disconnects, budgets, timers and how winners are settled.",
+    "Quick answers for participants, organizers and streamers about bidding, disconnects, budgets, timers and how winners are settled.",
 };
 
 const FAQS = [
@@ -37,8 +37,8 @@ const FAQS = [
     glow: "shadow-[0_0_70px_rgba(34,211,238,0.08)]",
   },
   {
-    q: "Can spectators watch the auction live?",
-    a: "Yes, if the organizer provides spectator access. Spectator mode shows live state without bidding controls.",
+    q: "Can people watch the auction live?",
+    a: "Yes — community members with the Streamer role broadcast the live draft on YouTube, Twitch or TikTok. The broadcast room shows the live state without bidding controls.",
     glow: "shadow-[0_0_70px_rgba(236,72,153,0.08)]",
   },
   {
@@ -75,7 +75,7 @@ export default function FaqPage() {
               </span>
             </h1>
             <p className="mt-4 max-w-xl text-zinc-300">
-              Quick answers for participants, organizers and spectators. If your tournament
+              Quick answers for participants, organizers and streamers. If your tournament
               has custom rules, the organizer’s rules take priority.
             </p>
 
@@ -86,8 +86,8 @@ export default function FaqPage() {
               <GlowLink href="/tournaments" glow="shadow-[0_0_60px_rgba(34,211,238,0.12)]">
                 Tournament format <span aria-hidden>→</span>
               </GlowLink>
-              <GlowLink href="/spectator" glow="shadow-[0_0_60px_rgba(236,72,153,0.10)]">
-                Spectator info <span aria-hidden>→</span>
+              <GlowLink href="/streamers" glow="shadow-[0_0_60px_rgba(139,92,246,0.14)]">
+                Streamer info <span aria-hidden>→</span>
               </GlowLink>
             </div>
 
@@ -132,9 +132,9 @@ export default function FaqPage() {
                 </div>
               </div>
               <div className="rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
-                <div className="text-sm font-semibold">Spectators</div>
+                <div className="text-sm font-semibold">Streamers</div>
                 <div className="mt-2 text-sm text-zinc-400">
-                  What you can see live, delays, and result summaries.
+                  Going live, what the broadcast room shows, and result summaries.
                 </div>
               </div>
             </div>
@@ -159,7 +159,7 @@ export default function FaqPage() {
             links={[
               { href: "/tournaments", label: "Tournament format", glow: "shadow-[0_0_60px_rgba(34,211,238,0.12)]" },
               { href: "/rules", label: "Rules", glow: "shadow-[0_0_60px_rgba(16,185,129,0.12)]" },
-              { href: "/spectator", label: "Spectator", glow: "shadow-[0_0_60px_rgba(236,72,153,0.10)]" },
+              { href: "/streamers", label: "Streamers", glow: "shadow-[0_0_60px_rgba(139,92,246,0.14)]" },
             ]}
           />
         </Reveal>

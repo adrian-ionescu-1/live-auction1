@@ -21,11 +21,13 @@ export default function MemberNav({
   onSelect: (id: string) => void;
 }) {
   return (
-    <nav
-      aria-label="Dashboard sections"
-      className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      <div className="inline-flex min-w-full gap-1.5 rounded-2xl bg-white/5 p-1.5 ring-1 ring-white/10">
+    <nav aria-label="Dashboard sections">
+      {/* The pill spans the full card width (like the profile card). Inside, the
+          tabs are a w-fit group with mx-auto, so they stay centered when there's
+          room and the pill scrolls them when a member has enough tabs to
+          overflow the row. */}
+      <div className="overflow-x-auto rounded-2xl bg-white/5 p-1.5 ring-1 ring-white/10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mx-auto flex w-fit gap-1.5">
         {items.map((item) => {
           const isActive = active === item.id;
           return (
@@ -53,6 +55,7 @@ export default function MemberNav({
             </button>
           );
         })}
+        </div>
       </div>
     </nav>
   );

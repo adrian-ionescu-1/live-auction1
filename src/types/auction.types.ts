@@ -1,3 +1,6 @@
+// Auction-room participant roles. SPECTATOR is the watch-only seat a streamer
+// (a Discord member with the 'streamer' profile role) takes in the broadcast
+// room — it can follow the live auction but never bids.
 export type UserRole = 'ADMIN' | 'USER' | 'SPECTATOR';
 
 export interface User {
