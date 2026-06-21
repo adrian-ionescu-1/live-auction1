@@ -4,6 +4,11 @@ import { Player } from '@/types/auction.types';
 
 interface PlayerCardProps {
   player: Player;
+  /**
+   * The opening bid to show (the live event's chosen starting bid). Falls back
+   * to the player's stored base price when not provided.
+   */
+  startingBid?: number;
 }
 
 function getWinrateBackground(winrate: number): string {
@@ -48,7 +53,8 @@ function getWinrateTextColor(winrate: number): string {
   return 'text-fuchsia-200';
 }
 
-export default function PlayerCard({ player }: PlayerCardProps) {
+export default function PlayerCard({ player, startingBid }: PlayerCardProps) {
+  const opening = startingBid ?? player.basePrice;
   const bgClass = getWinrateBackground(player.winrate);
   const glowClass = getWinrateGlow(player.winrate);
   const wrLabel = getWinrateLabel(player.winrate);
@@ -178,7 +184,7 @@ export default function PlayerCard({ player }: PlayerCardProps) {
             Starting Bid
           </span>
           <span className="text-2xl font-black text-zinc-100 tabular-nums">
-            ${player.basePrice}
+            ${opening.toLocaleString()}
           </span>
         </div>
       </div>

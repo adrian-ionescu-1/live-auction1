@@ -1,7 +1,7 @@
 # 🏆 Live Auction App
 
 Real-time player auction for WoT Blitz tournaments — FIFA-style draft. Admins run
-the auction, users bid live under a budget, spectators watch. Built on Next.js +
+the auction, users bid live under a budget, streamers broadcast it live. Built on Next.js +
 Supabase with realtime sync and a server-authoritative timer.
 
 🔗 **Live demo:** https://live-auction1.vercel.app/
@@ -29,8 +29,9 @@ src/
 │  ├─ _components/           # marketing UI (SiteHeader, CTASection, ui, Reveal, …)
 │  ├─ _data/                 # static content for the landing page
 │  ├─ login/                 # the auction room (auth gate + live app)
+│  ├─ stream/                # the streamer broadcast room (watch-only)
 │  ├─ tournaments|rules|     # public info pages
-│  │  faq|spectator/
+│  │  faq|streamers/
 │  ├─ layout.tsx page.tsx    # root layout + landing page
 │  ├─ not-found.tsx globals.css
 │
@@ -90,10 +91,12 @@ scripts/load-test.mjs        # concurrency / load test
 | Role          | Can                                                                 |
 | ------------- | ------------------------------------------------------------------- |
 | 👑 **Admin**     | Start / pause / resume / reset the auction, extend the timer, see every team's squad and budget |
-| 🙋 **User**      | Bid in real time under a fixed budget, track their squad and remaining balance |
-| 👀 **Spectator** | Read-only live view (no bidding)                                    |
+| 🙋 **Bidder**    | Bid in real time under a fixed budget, track their squad and remaining balance |
+| 🎥 **Streamer**  | Watch-only broadcast room (live player, timer, price and bids) for going live on YouTube / Twitch / TikTok |
 
-Login is **key-based**: each access key maps to a user (`auth_keys` table).
+Members sign in with **Discord** and an admin grants roles (a member can hold
+several at once). The admin still uses a key-based login (`auth_keys` table); the
+streamer's broadcast seat reuses the internal `SPECTATOR` participant role.
 
 ---
 

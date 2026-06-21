@@ -44,6 +44,14 @@ export const WOTBLITZ_ROLE = "wotblitz";
 export const BIDDER_ROLE = "bidder";
 
 /**
+ * The role an admin grants to a member who broadcasts the live auction on
+ * YouTube / Twitch / TikTok. A streamer joins the auction room as a watch-only
+ * viewer (they see the live player, timer, price and bids, but never bid).
+ * Replaces the old key-based "spectator" concept.
+ */
+export const STREAMER_ROLE = "streamer";
+
+/**
  * A member an admin has barred from the site (broke the rules / terms). They can
  * still sign in, but their dashboard is replaced by a full-screen exclusion
  * notice and they can't bid or reach any admin area.

@@ -13,7 +13,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Auction App • WoT Blitz Tournament Draft",
   description:
-    "Esports tournament auction draft for WoT Blitz. Real-time bidding, fair-play rules, and spectator mode.",
+    "Esports tournament auction draft for WoT Blitz. Real-time bidding, fair-play rules, and live streamer broadcasts.",
 };
 
 function SiteFooter() {
@@ -50,7 +50,7 @@ function SiteFooter() {
                 { href: "/tournaments", label: "Tournaments" },
                 { href: "/rules", label: "Rules" },
                 { href: "/faq", label: "FAQ" },
-                { href: "/spectator", label: "Spectator" },
+                { href: "/streamers", label: "Streamers" },
               ].map((l) => (
                 <li key={l.href}>
                   <Link
@@ -76,8 +76,8 @@ function SiteFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/spectator" className="text-zinc-400 transition hover:text-zinc-100">
-                  Watch as spectator
+                <Link href="/streamers" className="text-zinc-400 transition hover:text-zinc-100">
+                  Become a streamer
                 </Link>
               </li>
             </ul>

@@ -122,6 +122,34 @@ export class AuctionEngine {
     }
   }
 
+  /**
+   * RPC: a signed-in Discord member with the 'streamer' role joins the auction
+   * room as a watch-only viewer. Returns the participant (users) id to log in
+   * with — that row carries the SPECTATOR role, which blocks bidding downstream.
+   */
+  static async enterAuctionAsStreamer(): Promise<{
+    success: boolean;
+    userId: string | null;
+    error: string | null;
+  }> {
+    try {
+      const { data, error } = await supabase.rpc('enter_auction_as_streamer');
+      if (error) {
+        return { success: false, userId: null, error: error.message };
+      }
+      if (data && typeof data === 'object') {
+        return {
+          success: data.success === true,
+          userId: data.user_id ?? null,
+          error: data.error ?? null,
+        };
+      }
+      return { success: false, userId: null, error: 'Unexpected response' };
+    } catch (error: any) {
+      return { success: false, userId: null, error: error.message ?? 'Failed to join' };
+    }
+  }
+
   /** Admin: ban / unban an auction participant. */
   static async setParticipantBanned(userId: string, banned: boolean): Promise<boolean> {
     const { error } = await supabase.rpc('admin_set_user_banned', {

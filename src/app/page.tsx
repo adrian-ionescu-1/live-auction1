@@ -95,7 +95,7 @@ export default function HomeLanding() {
                 Re-auction (unsold)
               </span>
               <span className="rounded-full bg-white/5 px-3 py-1 ring-1 ring-white/10">
-                Spectator mode
+                Streamer broadcasts
               </span>
             </div>
           </div>
@@ -387,7 +387,7 @@ export default function HomeLanding() {
             subtitle="Participants join using an access key provided by the tournament organizer."
             primaryLabel="Enter Auction"
             links={[
-              { href: "/spectator", label: "Spectator mode", glow: "shadow-[0_0_60px_rgba(236,72,153,0.10)]" },
+              { href: "/streamers", label: "Streamers", glow: "shadow-[0_0_60px_rgba(139,92,246,0.14)]" },
               { href: "/tournaments", label: "Tournament format", glow: "shadow-[0_0_60px_rgba(34,211,238,0.12)]" },
               { href: "/rules", label: "Rules", glow: "shadow-[0_0_60px_rgba(16,185,129,0.10)]" },
               { href: "/faq", label: "FAQ", glow: "shadow-[0_0_60px_rgba(255,255,255,0.08)]" },

@@ -14,7 +14,7 @@ import { AuctionEngine } from "@/services/auctionEngine";
 import { EventsService } from "@/services/eventsService";
 import { CommunityEventsService } from "@/services/communityEventsService";
 import { supabase } from "@/lib/supabase";
-import { Profile, WOTBLITZ_ROLE, BIDDER_ROLE, EXCLUDED_ROLE } from "@/types/account.types";
+import { Profile, WOTBLITZ_ROLE, BIDDER_ROLE, STREAMER_ROLE, EXCLUDED_ROLE } from "@/types/account.types";
 import { AuctionEvent, MyEventResults } from "@/types/event.types";
 import { CommunityEvent } from "@/types/community-event.types";
 import { registrationState } from "@/components/admin/communityEventMeta";
@@ -27,6 +27,7 @@ import MemberNav, { MemberNavItem } from "@/components/dashboard/MemberNav";
 import WelcomeSection from "@/components/dashboard/sections/WelcomeSection";
 import ProfileSection, { DashboardNotice } from "@/components/dashboard/sections/ProfileSection";
 import AuctionsSection from "@/components/dashboard/sections/AuctionsSection";
+import StreamingSection from "@/components/dashboard/sections/StreamingSection";
 import ResultsSection from "@/components/dashboard/sections/ResultsSection";
 import ComingSoonSection from "@/components/dashboard/sections/ComingSoonSection";
 
@@ -58,8 +59,12 @@ export default function DashboardPage() {
 
   // Load the role-dependent data once we know the profile's roles.
   const loadRoleData = useCallback((p: Profile) => {
-    if (p.roles.includes(BIDDER_ROLE)) {
+    // Both bidders and streamers need to know about the live auction (to enter /
+    // to broadcast); only bidders have personal results.
+    if (p.roles.includes(BIDDER_ROLE) || p.roles.includes(STREAMER_ROLE)) {
       EventsService.getLiveEvent().then((ev) => setLiveEvent(ev));
+    }
+    if (p.roles.includes(BIDDER_ROLE)) {
       EventsService.listMyResults(p.id).then((r) => setMyResults(r));
     }
     if (p.roles.includes(BIDDER_ROLE) || p.roles.includes(WOTBLITZ_ROLE)) {
@@ -95,6 +100,12 @@ export default function DashboardPage() {
       setEnterError(res.error ?? "Could not join the auction");
       setEntering(false);
     }
+  };
+
+  // Streamers join the broadcast room; the /stream page provisions their
+  // watch-only seat (enter_auction_as_streamer) on arrival.
+  const handleJoinStream = () => {
+    router.push("/stream");
   };
 
   useEffect(() => {
@@ -153,8 +164,9 @@ export default function DashboardPage() {
   const roles = useMemo(() => profile?.roles ?? [], [profile]);
   const hasAdmin = roles.includes("admin");
   const hasBidder = roles.includes(BIDDER_ROLE);
+  const hasStreamer = roles.includes(STREAMER_ROLE);
   const hasWotBlitz = roles.includes(WOTBLITZ_ROLE);
-  const isGuestOnly = !hasAdmin && !hasBidder && !hasWotBlitz;
+  const isGuestOnly = !hasAdmin && !hasBidder && !hasStreamer && !hasWotBlitz;
 
   // Events this member registered for + the ones open to their roles right now.
   const myRegistrations = useMemo(
@@ -183,6 +195,15 @@ export default function DashboardPage() {
         tab: "auctions",
       });
     }
+    if (hasStreamer && liveEvent && liveEvent.status === "live") {
+      out.push({
+        id: `stream:${liveEvent.id}`,
+        kind: "auction",
+        title: liveEvent.name,
+        detail: "An auction is live to broadcast",
+        tab: "streaming",
+      });
+    }
     for (const e of openEventsForMe) {
       out.push({
         id: `event:${e.id}`,
@@ -193,7 +214,7 @@ export default function DashboardPage() {
       });
     }
     return out;
-  }, [hasBidder, liveEvent, openEventsForMe]);
+  }, [hasBidder, hasStreamer, liveEvent, openEventsForMe]);
 
   const unseenNotices = notices.filter((n) => !seen.has(n.id));
 
@@ -246,6 +267,9 @@ export default function DashboardPage() {
           { id: "results", label: "Results" },
         ]
       : []),
+    ...(hasStreamer
+      ? [{ id: "streaming", label: "Streaming", dot: unseenNotices.some((n) => n.tab === "streaming") }]
+      : []),
     ...(hasWotBlitz || hasBidder
       ? [
           { id: "events", label: "Events", dot: unseenNotices.some((n) => n.tab === "events") },
@@ -255,7 +279,13 @@ export default function DashboardPage() {
     { id: "contact", label: "Contact" },
   ];
 
-  const defaultSection = hasWotBlitz ? "profile" : hasBidder ? "auctions" : "welcome";
+  const defaultSection = hasWotBlitz
+    ? "profile"
+    : hasBidder
+      ? "auctions"
+      : hasStreamer
+        ? "streaming"
+        : "welcome";
   const active = activeSection ?? defaultSection;
 
   const selectSection = (id: string) => {
@@ -351,6 +381,10 @@ export default function DashboardPage() {
           )}
 
           {active === "results" && hasBidder && <ResultsSection results={myResults} />}
+
+          {active === "streaming" && hasStreamer && (
+            <StreamingSection liveEvent={liveEvent} nowMs={nowMs} onJoin={handleJoinStream} />
+          )}
 
           {active === "events" && (hasWotBlitz || hasBidder) && (
             <MemberEvents roles={profile.roles} onChanged={refresh} />

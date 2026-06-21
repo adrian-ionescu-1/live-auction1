@@ -45,8 +45,8 @@ export default function TournamentsPage() {
                 <GlowLink href="/faq" glow="shadow-[0_0_60px_rgba(255,255,255,0.08)]">
                   FAQ <span aria-hidden>→</span>
                 </GlowLink>
-                <GlowLink href="/spectator" glow="shadow-[0_0_60px_rgba(236,72,153,0.10)]">
-                  Spectator info <span aria-hidden>→</span>
+                <GlowLink href="/streamers" glow="shadow-[0_0_60px_rgba(139,92,246,0.14)]">
+                  Streamer info <span aria-hidden>→</span>
                 </GlowLink>
               </div>
 
@@ -205,7 +205,7 @@ export default function TournamentsPage() {
               links={[
                 { href: "/rules", label: "Rules", glow: "shadow-[0_0_60px_rgba(16,185,129,0.10)]" },
                 { href: "/faq", label: "FAQ", glow: "shadow-[0_0_60px_rgba(255,255,255,0.08)]" },
-                { href: "/spectator", label: "Spectator", glow: "shadow-[0_0_60px_rgba(236,72,153,0.10)]" },
+                { href: "/streamers", label: "Streamers", glow: "shadow-[0_0_60px_rgba(139,92,246,0.14)]" },
               ]}
             />
           </Reveal>

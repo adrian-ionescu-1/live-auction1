@@ -8,12 +8,11 @@ export default function AuctionBoard() {
   const {
     status,
     currentPlayer,
-    countdown,
-    timeRemaining,
     currentRound,
     roundTotalPlayers,
     roundCurrentIndex,
     currentUserRole,
+    liveEvent,
     initializeRealtime,
     cleanupRealtime,
   } = useAuctionStore();
@@ -71,59 +70,14 @@ export default function AuctionBoard() {
     );
   }
 
-  const resultMessage = useAuctionStore.getState().resultMessage;
+  // The card's "Starting Bid" mirrors the live event's opening bid; only fall
+  // back to the player's stored base price when the event doesn't set one.
+  const startingBid =
+    liveEvent && liveEvent.bidStart > 0 ? liveEvent.bidStart : currentPlayer.basePrice;
 
   return (
     <div className="flex w-full flex-col items-center gap-6">
-      <div className="w-full max-w-md animate-fade-up">
-        {status === 'countdown' && countdown > 0 && (
-          <div className="rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 bg-amber-500/15">
-            <p className="text-sm font-semibold text-amber-200 mb-2">
-              Auction Starting In
-            </p>
-            <p className="text-6xl font-extrabold text-zinc-100 tabular-nums sm:text-7xl">
-              {countdown}
-            </p>
-          </div>
-        )}
-
-        {status === 'active' && (
-          <div
-            className={`rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 transition ${
-              timeRemaining <= 10
-                ? 'bg-red-500/18 animate-pulse'
-                : timeRemaining <= 15
-                ? 'bg-orange-500/16'
-                : 'bg-emerald-500/14'
-            }`}
-          >
-            <p className="text-sm font-semibold text-zinc-200 mb-2">
-              Time Remaining
-            </p>
-            <p className="text-6xl font-extrabold text-zinc-100 tabular-nums sm:text-7xl">
-              {timeRemaining}s
-            </p>
-          </div>
-        )}
-
-        {status === 'paused' && (
-          <div className="rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 bg-amber-500/15">
-            <p className="text-sm font-semibold text-amber-200 mb-2">
-              Auction Paused
-            </p>
-            <p className="text-3xl font-extrabold text-zinc-100">⏸</p>
-          </div>
-        )}
-
-        {status === 'result' && currentUserRole !== 'ADMIN' && (
-          <div className="rounded-3xl p-6 text-center ring-1 ring-white/10 sm:p-8 bg-cyan-500/12">
-            <p className="text-sm font-semibold text-cyan-200 mb-2">Result</p>
-            <p className="text-base text-zinc-100">{resultMessage}</p>
-          </div>
-        )}
-      </div>
-
-      <PlayerCard player={currentPlayer} />
+      <PlayerCard player={currentPlayer} startingBid={startingBid} />
 
       <div className="w-full max-w-md animate-fade-up rounded-3xl bg-white/5 ring-1 ring-white/10 p-4 [animation-delay:120ms]">
         <div className="flex justify-between text-sm text-zinc-400 mb-2">

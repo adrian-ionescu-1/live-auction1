@@ -8,6 +8,7 @@ import { AuthService } from "@/services/authService";
 import { UserRole } from "@/types/auction.types";
 import LoginPage from "@/components/auth/LoginPage";
 import AuctionBoard from "@/components/auction/AuctionBoard";
+import AuctionTimer from "@/components/auction/AuctionTimer";
 import BidControls from "@/components/auction/BidControls";
 import AdminControls from "@/components/auction/AdminControls";
 import UserBalance from "@/components/auction/UserBalance";
@@ -16,7 +17,6 @@ import ResultBanner from "@/components/auction/ResultBanner";
 import AdminUserCards from "@/components/auction/AdminUserCards";
 import ResultsView from "@/components/auction/ResultsView";
 import BiddersList from "@/components/auction/BiddersList";
-import AccountMenu from "@/app/_components/AccountMenu";
 
 export default function AuctionRoomPage() {
   const router = useRouter();
@@ -107,12 +107,34 @@ export default function AuctionRoomPage() {
     </div>
   );
 
-  // Account card (UI only) – shown once signed in, replacing the back button.
-  // Gives key participants (admin / user / spectator) the same identity + Home
-  // + Log out card used everywhere else.
-  const AccountTopBar = () => (
+  // A bidder leaving the finished auction goes back to their dashboard; the
+  // closed event can't be re-entered, so we drop the auction session too.
+  const handleReturnToDashboard = () => {
+    logout();
+    router.push("/dashboard");
+  };
+
+  // Top-right exit (UI only) – a plain "Dashboard" button, like the streamer
+  // room, instead of the account/profile menu. Admins return to their control
+  // center keeping their session; bidders drop the auction session and head to
+  // their dashboard (they can re-enter from there at any time).
+  const handleExit = () => {
+    if (currentUserRole === "ADMIN") {
+      router.push("/admin");
+      return;
+    }
+    handleReturnToDashboard();
+  };
+
+  const DashboardTopBar = () => (
     <div className="fixed right-3 top-3 z-50 sm:right-4 sm:top-4">
-      <AccountMenu loggedOutCta={false} />
+      <button
+        type="button"
+        onClick={handleExit}
+        className="rounded-xl bg-white/5 px-3 py-2 text-xs font-semibold text-zinc-200 ring-1 ring-white/10 backdrop-blur transition hover:bg-white/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 sm:px-4 sm:text-sm"
+      >
+        ← {currentUserRole === "ADMIN" ? "Admin dashboard" : "Dashboard"}
+      </button>
     </div>
   );
 
@@ -125,17 +147,10 @@ export default function AuctionRoomPage() {
     );
   }
 
-  // A member leaving the finished auction goes back to their dashboard; the
-  // closed event can't be re-entered, so we drop the auction session too.
-  const handleReturnToDashboard = () => {
-    logout();
-    router.push("/dashboard");
-  };
-
   if (status === "finished" && currentUserRole !== "ADMIN") {
     return (
       <>
-        <AccountTopBar />
+        <DashboardTopBar />
         <ResultsView onClose={handleReturnToDashboard} />
       </>
     );
@@ -143,7 +158,7 @@ export default function AuctionRoomPage() {
 
   return (
     <main className="relative min-h-screen px-3 pb-10 pt-16 sm:px-4 sm:py-8">
-      <AccountTopBar />
+      <DashboardTopBar />
 
       {/* No page-wide card: the global background shows through; each panel
           carries its own surface. */}
@@ -168,9 +183,12 @@ export default function AuctionRoomPage() {
             <AuctionBoard />
           </div>
 
-          {/* Bidding — second on mobile, right column on desktop.
-              Admins can't bid, so they get the live Bidders list instead. */}
+          {/* Bidding — second on mobile, right column on desktop. The phase
+              timer sits on top here (above "Place your bid") so the player card
+              in the center column stays higher and easier to read. Admins can't
+              bid, so they get the live Bidders list instead. */}
           <div className="order-2 flex flex-col items-center gap-6 animate-fade-up [animation-delay:140ms] lg:order-3">
+            <AuctionTimer />
             {currentUserRole === "ADMIN" ? <BiddersList /> : <BidControls />}
           </div>
 

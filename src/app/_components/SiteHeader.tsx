@@ -19,7 +19,7 @@ const NAV = [
   { href: "/tournaments", label: "Tournaments" },
   { href: "/rules", label: "Rules" },
   { href: "/faq", label: "FAQ" },
-  { href: "/spectator", label: "Spectator" },
+  { href: "/streamers", label: "Streamers" },
 ] as const;
 
 export default function SiteHeader({

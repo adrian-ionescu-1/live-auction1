@@ -98,7 +98,7 @@ export default function BidControls() {
           <p className="text-zinc-400">
             {currentUserRole === 'ADMIN'
               ? 'Admins cannot place bids'
-              : 'Spectators cannot place bids'}
+              : 'Streamers are watch-only — no bidding'}
           </p>
         </div>
       </div>
