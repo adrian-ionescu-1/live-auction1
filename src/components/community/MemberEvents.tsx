@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CommunityEventsService } from "@/services/communityEventsService";
-import { CommunityEvent } from "@/types/community-event.types";
+import { CommunityEvent, MyRegistration } from "@/types/community-event.types";
 import { registrationState } from "@/components/admin/communityEventMeta";
 import CommunityEventView from "@/components/community/CommunityEventView";
 import RegistrationFormDialog from "@/components/community/RegistrationFormDialog";
@@ -22,6 +22,7 @@ export default function MemberEvents({
 }) {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [registered, setRegistered] = useState<Set<string>>(new Set());
+  const [myRegs, setMyRegs] = useState<Map<string, MyRegistration>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [active, setActive] = useState<CommunityEvent | null>(null);
@@ -30,15 +31,17 @@ export default function MemberEvents({
 
   const load = useCallback(async () => {
     const lc = roles.map((r) => r.toLowerCase());
-    const [all, mine] = await Promise.all([
+    const [all, mine, myRegistrations] = await Promise.all([
       CommunityEventsService.listEvents(),
       CommunityEventsService.listMyRegisteredEventIds(),
+      CommunityEventsService.listMyRegistrations(),
     ]);
     // An event shows if ANY of the member's roles is in its visible_roles.
     setEvents(
       all.filter((e) => e.kind === "event" && e.visibleRoles.some((r) => lc.includes(r)))
     );
     setRegistered(mine);
+    setMyRegs(new Map(myRegistrations.map((r) => [r.eventId, r])));
     setLoading(false);
   }, [roles]);
 
@@ -49,11 +52,16 @@ export default function MemberEvents({
   const handleSubmit = async (result: {
     values: Record<string, string>;
     blitz: { accountId: number; playerName: string; stats: { battles: number; winrate: number; avgDamage: number } } | null;
+    cardVariant: string;
+    flag: string | null;
   }) => {
     if (!active) return;
     setBusy(true);
     setError(null);
-    const res = await CommunityEventsService.register(active.id, result.values, result.blitz);
+    const res = await CommunityEventsService.register(active.id, result.values, result.blitz, {
+      variant: result.cardVariant,
+      flag: result.flag,
+    });
     setBusy(false);
     if (res.success) {
       setActive(null);
@@ -122,6 +130,8 @@ export default function MemberEvents({
         busy={busy}
         error={error}
         initialValues={{}}
+        initialCardVariant={active ? myRegs.get(active.id)?.cardVariant ?? null : null}
+        initialFlag={active ? myRegs.get(active.id)?.flag ?? null : null}
         requireConsent
         onSubmit={handleSubmit}
         onCancel={() => setActive(null)}

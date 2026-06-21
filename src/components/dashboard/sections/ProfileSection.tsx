@@ -4,11 +4,12 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Profile } from "@/types/account.types";
-import { CommunityEvent } from "@/types/community-event.types";
+import { CommunityEvent, MyRegistration } from "@/types/community-event.types";
 import { registrationState } from "@/components/admin/communityEventMeta";
 import { CommunityEventsService } from "@/services/communityEventsService";
+import CardArt from "@/components/auction/cardDesigns";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ConsentConfirmDialog from "@/components/dashboard/ConsentConfirmDialog";
 import BlitzAccountLinker from "@/components/dashboard/BlitzAccountLinker";
@@ -60,11 +61,33 @@ function NoticeCard({ notices }: { notices: DashboardNotice[] }) {
   );
 }
 
+// The member's personalized card for one registration (their chosen design,
+// flag and validated stats — exactly what shows up in the auction).
+function MyCard({ reg }: { reg: MyRegistration }) {
+  const hasStats = reg.blitzStats !== null;
+  return (
+    <div className="mt-3 flex justify-center">
+      <CardArt
+        variant={reg.cardVariant}
+        name={reg.playerName || reg.displayName}
+        flag={reg.flag}
+        winrate={hasStats ? reg.blitzStats!.winrate : null}
+        battles={hasStats ? reg.blitzStats!.battles : null}
+        avgDamage={hasStats ? reg.blitzStats!.avgDamage : null}
+        startingBid={null}
+        hasStats={hasStats}
+      />
+    </div>
+  );
+}
+
 function RegistrationsCard({
   events,
+  myRegs,
   onWithdraw,
 }: {
   events: CommunityEvent[];
+  myRegs: Map<string, MyRegistration>;
   onWithdraw: (event: CommunityEvent) => void;
 }) {
   return (
@@ -75,7 +98,7 @@ function RegistrationsCard({
           You haven&apos;t registered for any events yet. They&apos;ll show up here once you do.
         </p>
       ) : (
-        <ul className="mt-4 space-y-2">
+        <ul className="mt-4 space-y-3">
           {events.map((ev) => {
             const state = registrationState(ev.registrationOpensAt, ev.registrationClosesAt);
             const badge =
@@ -86,28 +109,32 @@ function RegistrationsCard({
                   : "bg-white/10 text-zinc-300 ring-white/15";
             const label =
               state === "open" ? "Open" : state === "before" ? "Upcoming" : "Closed";
+            const reg = myRegs.get(ev.id);
             return (
               <li
                 key={ev.id}
-                className="flex flex-wrap items-center gap-2 rounded-2xl bg-black/25 px-4 py-3 ring-1 ring-white/10"
+                className="rounded-2xl bg-black/25 p-4 ring-1 ring-white/10"
               >
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
-                  {ev.title}
-                </span>
-                <span
-                  className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${badge}`}
-                >
-                  {label}
-                </span>
-                {state === "open" && (
-                  <button
-                    type="button"
-                    onClick={() => onWithdraw(ev)}
-                    className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/15"
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-100">
+                    {ev.title}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${badge}`}
                   >
-                    Withdraw
-                  </button>
-                )}
+                    {label}
+                  </span>
+                  {state === "open" && (
+                    <button
+                      type="button"
+                      onClick={() => onWithdraw(ev)}
+                      className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/15"
+                    >
+                      Withdraw
+                    </button>
+                  )}
+                </div>
+                {reg && <MyCard reg={reg} />}
               </li>
             );
           })}
@@ -133,6 +160,20 @@ export default function ProfileSection({
   const [withdrawing, setWithdrawing] = useState<CommunityEvent | null>(null);
   const [withdrawBusy, setWithdrawBusy] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [myRegs, setMyRegs] = useState<Map<string, MyRegistration>>(new Map());
+
+  // The member's own registration details (card design, flag, validated stats),
+  // so we can show their personalized card under each registered event. Reloads
+  // whenever the registrations list changes (e.g. after a new sign-up).
+  useEffect(() => {
+    let active = true;
+    CommunityEventsService.listMyRegistrations().then((rows) => {
+      if (active) setMyRegs(new Map(rows.map((r) => [r.eventId, r])));
+    });
+    return () => {
+      active = false;
+    };
+  }, [registrations]);
 
   const link = profile.blitz;
 
@@ -166,7 +207,7 @@ export default function ProfileSection({
         />
       )}
 
-      <RegistrationsCard events={registrations} onWithdraw={setWithdrawing} />
+      <RegistrationsCard events={registrations} myRegs={myRegs} onWithdraw={setWithdrawing} />
 
       {/* Switch-account guard: make sure it's really their own account. */}
       <ConfirmDialog

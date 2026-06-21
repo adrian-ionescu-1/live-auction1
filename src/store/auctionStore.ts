@@ -278,6 +278,8 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                   winrate: Number(data.winrate) || 0,
                   avg_damage: Number(data.avg_damage) || 0,
                   basePrice: Number(data.base_price) || 100,
+                  variant: (data.card_variant as string) ?? null,
+                  flag: (data.flag as string) ?? null,
                 };
               }
             }

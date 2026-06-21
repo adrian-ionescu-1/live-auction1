@@ -21,6 +21,7 @@ import { Player } from "@/types/auction.types";
 import { useMembersPresence } from "@/app/_components/useMembersPresence";
 import { AccountAvatar } from "@/app/_components/AccountMenu";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import UnsavedChangesGuard from "@/components/admin/UnsavedChangesGuard";
 
 const inputClass =
   "w-full rounded-xl bg-black/30 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40";
@@ -404,6 +405,22 @@ export default function CreateEventPage() {
 
   const enrolledCount = bidders.filter((m) => !excludedIds.has(m.id)).length;
 
+  // The form holds nothing until "Create" succeeds, so warn before leaving once
+  // the admin has changed anything from the pristine defaults.
+  const dirty =
+    !submitting &&
+    (name.trim() !== "" ||
+      selectedListId !== "" ||
+      excludedIds.size > 0 ||
+      budgetTouched ||
+      playerLimit !== "8" ||
+      openingBid !== "100" ||
+      bidIncrements.join(",") !== "10,50,100" ||
+      playerDuration !== "30" ||
+      extendThreshold !== "10" ||
+      extendAmount !== "5" ||
+      openMode !== "now");
+
   const toggleExcluded = (id: string) =>
     setExcludedIds((prev) => {
       const next = new Set(prev);
@@ -458,6 +475,7 @@ export default function CreateEventPage() {
 
   return (
     <>
+      <UnsavedChangesGuard when={dirty} />
       <div className="animate-fade-up">
         <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
           Create auction

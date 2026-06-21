@@ -31,6 +31,10 @@ export interface Player {
   winrate: number;
   avg_damage: number;
   basePrice: number;
+  /** Chosen card design id (see cardDesigns). Null/undefined => default design. */
+  variant?: string | null;
+  /** ISO country code for the card's flag, or null for none. */
+  flag?: string | null;
 }
 
 export interface Bid {
