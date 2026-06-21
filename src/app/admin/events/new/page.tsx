@@ -154,7 +154,7 @@ function IncrementEditor({
           value={custom}
           onChange={(e) => setCustom(e.target.value)}
           placeholder="Custom amount"
-          className={inputClass}
+          className={`${inputClass} min-w-0`}
         />
         <button
           type="button"
@@ -405,7 +405,7 @@ export default function CreateEventPage() {
       <div className="mt-6 grid animate-fade-up gap-6 lg:grid-cols-3">
         {/* Form */}
         <form
-          className="space-y-5 lg:col-span-2"
+          className="min-w-0 space-y-5 lg:col-span-2"
           onSubmit={(e) => {
             e.preventDefault();
             if (canSubmit) setConfirmOpen(true);
@@ -469,34 +469,34 @@ export default function CreateEventPage() {
             title="Reserve & budget"
             desc="Calculated from the bidding setup. The budget can be higher, never lower."
           >
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div className="rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
+            <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 sm:grid-cols-3">
+              <div className="min-w-0 rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
                 <div className="text-xs uppercase tracking-wide text-zinc-400">
                   Reserve / player
                 </div>
-                <div className="mt-1 text-2xl font-extrabold tabular-nums text-cyan-200">
+                <div className="mt-1 truncate text-xl font-extrabold tabular-nums text-cyan-200 sm:text-2xl">
                   ${reservePerPlayer.toLocaleString()}
                 </div>
                 <div className="mt-0.5 text-[11px] text-zinc-500">
                   ${openingNum} opening + ${minIncrement} button
                 </div>
               </div>
-              <div className="rounded-2xl bg-cyan-500/10 p-4 ring-1 ring-cyan-400/25">
+              <div className="min-w-0 rounded-2xl bg-cyan-500/10 p-4 ring-1 ring-cyan-400/25">
                 <div className="text-xs uppercase tracking-wide text-cyan-200/80">
                   Reserve / member
                 </div>
-                <div className="mt-1 text-2xl font-extrabold tabular-nums text-cyan-200">
+                <div className="mt-1 truncate text-xl font-extrabold tabular-nums text-cyan-200 sm:text-2xl">
                   ${totalReserve.toLocaleString()}
                 </div>
                 <div className="mt-0.5 text-[11px] text-cyan-200/70">
                   {limitNum} × ${reservePerPlayer.toLocaleString()}
                 </div>
               </div>
-              <div className="col-span-2 rounded-2xl bg-emerald-500/10 p-4 ring-1 ring-emerald-400/25 sm:col-span-1">
+              <div className="min-w-0 rounded-2xl bg-emerald-500/10 p-4 ring-1 ring-emerald-400/25 xs:col-span-2 sm:col-span-1">
                 <div className="text-xs uppercase tracking-wide text-emerald-200/80">
                   Spendable surplus
                 </div>
-                <div className="mt-1 text-2xl font-extrabold tabular-nums text-emerald-200">
+                <div className="mt-1 truncate text-xl font-extrabold tabular-nums text-emerald-200 sm:text-2xl">
                   ${surplus.toLocaleString()}
                 </div>
                 <div className="mt-0.5 text-[11px] text-emerald-200/70">
@@ -672,7 +672,7 @@ export default function CreateEventPage() {
         </form>
 
         {/* Right column: members + players */}
-        <div className="space-y-6 lg:col-span-1">
+        <div className="min-w-0 space-y-6 lg:col-span-1">
           <BidderAccessSelect
             members={bidders}
             onlineIds={onlineIds}
