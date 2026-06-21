@@ -123,12 +123,17 @@ export class CommunityEventsService {
     return (data ?? []).map((r) => mapEvent(r as Record<string, unknown>));
   }
 
-  /** Create an empty standalone participant list (admin). Returns its id. */
+  /**
+   * Create an empty standalone participant list (admin). Returns its id. Pass a
+   * Blitz region to make participants validate a real in-game account when added.
+   */
   static async createParticipantList(
-    name: string
+    name: string,
+    region: BlitzRegion | null = null
   ): Promise<{ success: boolean; eventId: string | null; error: string | null }> {
     const { data, error } = await supabase.rpc("admin_create_participant_list", {
       p_name: name,
+      p_region: region,
       p_admin_key: adminKey(),
     });
     if (error) return { success: false, eventId: null, error: error.message };
@@ -253,6 +258,19 @@ export class CommunityEventsService {
 
   static async deleteEvent(eventId: string): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("admin_delete_community_event", {
+      p_event_id: eventId,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
+  /**
+   * Turn an event into a standalone participant list without losing its
+   * registrations. Used by the Events page "Delete event" so the participant
+   * list survives in the Participant lists page (only deleted there for good).
+   */
+  static async convertEventToList(eventId: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_convert_event_to_list", {
       p_event_id: eventId,
       p_admin_key: adminKey(),
     });

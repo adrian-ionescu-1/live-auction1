@@ -12,6 +12,7 @@ import CommunityEventView from "@/components/community/CommunityEventView";
 import EditCommunityEventDialog from "@/components/community/EditCommunityEventDialog";
 import DatePromptDialog from "@/components/community/DatePromptDialog";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import ConfirmByNameDialog from "@/components/admin/ConfirmByNameDialog";
 import { localInputValue } from "@/components/admin/communityEventMeta";
 
 export default function CommunityEventsListPage() {
@@ -95,7 +96,9 @@ export default function CommunityEventsListPage() {
   const handleDelete = async () => {
     if (!deleting) return;
     setBusy(true);
-    const res = await CommunityEventsService.deleteEvent(deleting.id);
+    // Deleting an event keeps its participants: the row becomes a standalone
+    // list in the Participant lists page (only removed for good there).
+    const res = await CommunityEventsService.convertEventToList(deleting.id);
     setBusy(false);
     if (res.success) {
       setDeleting(null);
@@ -256,13 +259,22 @@ export default function CommunityEventsListPage() {
         onCancel={() => setClosing(null)}
       />
 
-      <ConfirmDialog
+      <ConfirmByNameDialog
         isOpen={deleting !== null}
+        eventName={deleting?.title ?? ""}
         title="Delete this event?"
-        message={`"${deleting?.title ?? ""}" and its participant list will be permanently removed. This can't be undone.`}
         tone="danger"
-        confirmLabel="Yes, delete it"
+        confirmLabel="Delete event"
         busy={busy}
+        description={
+          <>
+            The announcement{" "}
+            <span className="font-semibold text-zinc-200">{deleting?.title}</span> is removed from
+            Events. Its participant list is kept — it moves to{" "}
+            <span className="font-semibold text-zinc-200">Participant lists</span>, where you can
+            still use it for an auction or delete it for good.
+          </>
+        }
         onConfirm={handleDelete}
         onCancel={() => setDeleting(null)}
       />

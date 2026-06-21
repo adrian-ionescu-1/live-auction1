@@ -86,9 +86,12 @@ function makeKey(label: string, taken: Set<string>): string {
 function RegistrationFieldsEditor({
   fields,
   onChange,
+  optional = false,
 }: {
   fields: RegistrationField[];
   onChange: (next: RegistrationField[]) => void;
+  /** When true the form is optional (a Blitz region already validates players). */
+  optional?: boolean;
 }) {
   const [label, setLabel] = useState("");
   const [type, setType] = useState<RegistrationFieldType>("text");
@@ -109,8 +112,10 @@ function RegistrationFieldsEditor({
   return (
     <div className="space-y-3">
       {fields.length === 0 ? (
-        <p className="text-xs text-amber-200">
-          Add at least one field participants fill in (e.g. in-game nickname).
+        <p className={`text-xs ${optional ? "text-zinc-500" : "text-amber-200"}`}>
+          {optional
+            ? "Optional — Blitz validation already captures each player. Add fields only if you need extra info."
+            : "Add at least one field participants fill in (e.g. in-game nickname)."}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -235,7 +240,11 @@ export default function CreateCommunityEventPage() {
 
   const titleValid = title.trim().length > 0;
   const rolesValid = roles.size > 0;
-  const fieldsValid = fields.length > 0;
+  // Blitz region validation already identifies each participant (in-game account),
+  // so a registration form is optional when a region is set. Without a region the
+  // form is the only way to collect data, so at least one field is required.
+  const blitzValidation = region !== "";
+  const fieldsValid = blitzValidation || fields.length > 0;
   const customValid = categoryKey !== "custom" || customName.trim().length > 0;
   const linkValid = !hasLink || linkUrl.trim().length > 0;
   const canSubmit =
@@ -345,10 +354,16 @@ export default function CreateCommunityEventPage() {
                   ASIA
                 </option>
               </select>
-              {region && (
+              {region ? (
                 <p className="mt-1.5 text-xs text-emerald-200/80">
                   Players will verify their account on {region.toUpperCase()} and their stats
-                  (battles, win rate, avg damage) are captured automatically.
+                  (battles, win rate, avg damage) are captured automatically. The registration
+                  form below becomes optional.
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-amber-200/80">
+                  No region: players won&apos;t be validated, so the registration form below is
+                  required.
                 </p>
               )}
             </Field>
@@ -486,8 +501,16 @@ export default function CreateCommunityEventPage() {
         </Section>
 
         {/* 5. Registration form */}
-        <Section step={5} title="Registration form" desc="The fields each participant fills in to register.">
-          <RegistrationFieldsEditor fields={fields} onChange={setFields} />
+        <Section
+          step={5}
+          title={blitzValidation ? "Registration form (optional)" : "Registration form"}
+          desc={
+            blitzValidation
+              ? "Players validate their Blitz account, so fields here are optional extras."
+              : "The fields each participant fills in to register."
+          }
+        >
+          <RegistrationFieldsEditor fields={fields} onChange={setFields} optional={blitzValidation} />
         </Section>
 
         {error && <p className="text-sm font-semibold text-red-200">{error}</p>}
