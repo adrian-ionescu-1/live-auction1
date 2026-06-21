@@ -8,6 +8,12 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // Extra-small breakpoint for fine-tuning layouts on narrow phones (~320px)
+      // before the default `sm` (640px) kicks in. Added on top of the defaults,
+      // so existing breakpoints are unchanged.
+      screens: {
+        xs: "480px",
+      },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":
