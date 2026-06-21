@@ -274,6 +274,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                   id: data.id,
                   name: data.name || 'Unknown Player',
                   wn8_30d: Number(data.wn8_30d) || 0,
+                  battles: Number(data.battles) || 0,
                   winrate: Number(data.winrate) || 0,
                   avg_damage: Number(data.avg_damage) || 0,
                   basePrice: Number(data.base_price) || 100,

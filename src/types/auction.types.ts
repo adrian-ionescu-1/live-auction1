@@ -23,6 +23,8 @@ export interface Player {
   id: string;
   name: string;
   wn8_30d: number;
+  /** Career battle count (shown on list-sourced player cards instead of WN8). */
+  battles: number;
   winrate: number;
   avg_damage: number;
   basePrice: number;

@@ -69,6 +69,7 @@ export interface SupabasePlayer {
   id: string;
   name: string;
   wn8_30d: number;
+  battles: number;
   winrate: number;
   avg_damage: number;
   base_price: number;

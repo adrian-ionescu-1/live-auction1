@@ -1,0 +1,119 @@
+// Community events shown to a signed-in member on their dashboard: the events
+// their role can see, with a "Participate" button that opens the registration
+// form. Already-registered events show a badge and let the member update their
+// answers while registration is open. Mobile-first.
+
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { CommunityEventsService } from "@/services/communityEventsService";
+import { CommunityEvent } from "@/types/community-event.types";
+import { registrationState } from "@/components/admin/communityEventMeta";
+import CommunityEventView from "@/components/community/CommunityEventView";
+import RegistrationFormDialog from "@/components/community/RegistrationFormDialog";
+
+export default function MemberEvents({ role }: { role: string }) {
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [registered, setRegistered] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
+
+  const [active, setActive] = useState<CommunityEvent | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const lc = role.toLowerCase();
+    const [all, mine] = await Promise.all([
+      CommunityEventsService.listEvents(),
+      CommunityEventsService.listMyRegisteredEventIds(),
+    ]);
+    setEvents(all.filter((e) => e.kind === "event" && e.visibleRoles.includes(lc)));
+    setRegistered(mine);
+    setLoading(false);
+  }, [role]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleSubmit = async (result: {
+    values: Record<string, string>;
+    blitz: { accountId: number; playerName: string; stats: { battles: number; winrate: number; avgDamage: number } } | null;
+  }) => {
+    if (!active) return;
+    setBusy(true);
+    setError(null);
+    const res = await CommunityEventsService.register(active.id, result.values, result.blitz);
+    setBusy(false);
+    if (res.success) {
+      setActive(null);
+      await load();
+    } else {
+      setError(res.error ?? "Could not register");
+    }
+  };
+
+  if (loading || events.length === 0) return null;
+
+  return (
+    <section className="mt-8 animate-fade-up sm:mt-10">
+      <h2 className="text-lg font-extrabold text-zinc-100 sm:text-xl">Events</h2>
+      <p className="mt-1 text-xs text-zinc-500">
+        Announcements open to your role. Register to take part.
+      </p>
+
+      <div className="mt-4 space-y-4">
+        {events.map((ev) => {
+          const reg = registrationState(ev.registrationOpensAt, ev.registrationClosesAt);
+          const isRegistered = registered.has(ev.id);
+          return (
+            <div
+              key={ev.id}
+              className="min-w-0 rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6"
+            >
+              <CommunityEventView event={ev}>
+                <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
+                  {isRegistered && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25">
+                      ✓ Registered
+                    </span>
+                  )}
+                  {reg === "open" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null);
+                        setActive(ev);
+                      }}
+                      className="rounded-2xl bg-emerald-500/20 px-5 py-2.5 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98]"
+                    >
+                      {isRegistered ? "Update my registration" : "Participate"}
+                    </button>
+                  ) : (
+                    <span className="text-xs font-semibold text-zinc-500">
+                      {reg === "before" ? "Registration not open yet" : "Registration closed"}
+                    </span>
+                  )}
+                </div>
+              </CommunityEventView>
+            </div>
+          );
+        })}
+      </div>
+
+      <RegistrationFormDialog
+        isOpen={active !== null}
+        title="Participate"
+        description={active ? `Register for "${active.title}".` : undefined}
+        fields={active?.registrationFields ?? []}
+        region={active?.region ?? null}
+        confirmLabel={registered.has(active?.id ?? "") ? "Update" : "Register"}
+        busy={busy}
+        error={error}
+        initialValues={{}}
+        onSubmit={handleSubmit}
+        onCancel={() => setActive(null)}
+      />
+    </section>
+  );
+}

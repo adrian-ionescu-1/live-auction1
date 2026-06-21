@@ -48,19 +48,11 @@ function getWinrateTextColor(winrate: number): string {
   return 'text-fuchsia-200';
 }
 
-function getWn8TextColor(wn8: number): string {
-  if (wn8 < 1250) return 'text-zinc-300';
-  if (wn8 < 2000) return 'text-emerald-200';
-  if (wn8 < 3000) return 'text-cyan-200';
-  return 'text-fuchsia-200';
-}
-
 export default function PlayerCard({ player }: PlayerCardProps) {
   const bgClass = getWinrateBackground(player.winrate);
   const glowClass = getWinrateGlow(player.winrate);
   const wrLabel = getWinrateLabel(player.winrate);
   const wrTextColor = getWinrateTextColor(player.winrate);
-  const wn8TextColor = getWn8TextColor(player.wn8_30d);
 
   return (
     <div
@@ -160,9 +152,9 @@ export default function PlayerCard({ player }: PlayerCardProps) {
 
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="rounded-2xl p-3 text-center bg-white/5 ring-1 ring-white/10">
-            <p className="text-[11px] text-zinc-500 mb-1">WN8</p>
-            <p className={`text-xl font-extrabold ${wn8TextColor} tabular-nums`}>
-              {player.wn8_30d}
+            <p className="text-[11px] text-zinc-500 mb-1">BATTLES</p>
+            <p className="text-xl font-extrabold text-cyan-200 tabular-nums">
+              {player.battles.toLocaleString()}
             </p>
           </div>
 

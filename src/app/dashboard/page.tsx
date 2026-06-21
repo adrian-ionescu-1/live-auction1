@@ -27,6 +27,7 @@ import { GradientCard } from "@/app/_components/ui";
 import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
 import ExcludedScreen from "@/app/_components/ExcludedScreen";
 import Logo from "@/app/_components/Logo";
+import MemberEvents from "@/components/community/MemberEvents";
 
 type RoleStyle = { label: string; chip: string };
 
@@ -428,6 +429,9 @@ export default function DashboardPage() {
             </div>
           </section>
         )}
+
+        {/* Community events open to this member's role. */}
+        <MemberEvents role={profile.role} />
 
         {/* Pending-role notice for fresh accounts */}
         {isGuest && (
