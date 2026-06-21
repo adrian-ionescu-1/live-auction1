@@ -37,10 +37,6 @@ const ROLE_STYLES: Record<string, RoleStyle> = {
     label: "Guest",
     chip: "bg-amber-400/15 text-amber-200 ring-amber-400/30",
   },
-  prime: {
-    label: "Prime",
-    chip: "bg-emerald-400/15 text-emerald-200 ring-emerald-400/30",
-  },
   admin: {
     label: "Admin",
     chip: "bg-fuchsia-400/15 text-fuchsia-200 ring-fuchsia-400/30",

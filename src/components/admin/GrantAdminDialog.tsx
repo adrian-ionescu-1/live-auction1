@@ -61,12 +61,16 @@ export default function GrantAdminDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Grant Admin access"
     >
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-zinc-950/95 ring-1 ring-red-500/30 shadow-2xl shadow-red-900/30">
+      {/* min-h-full + items-center keeps the card centred when it fits, but lets
+          it scroll into view (never tucked under the navbar) when it's taller
+          than the viewport. */}
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="w-full max-w-md overflow-hidden rounded-3xl bg-zinc-950/95 ring-1 ring-red-500/30 shadow-2xl shadow-red-900/30">
         {/* Loud red danger header — present on both steps. */}
         <div className="flex items-center gap-3 border-b border-red-500/30 bg-red-500/15 px-6 py-4">
           <span
@@ -175,6 +179,7 @@ export default function GrantAdminDialog({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
