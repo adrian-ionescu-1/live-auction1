@@ -7,6 +7,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 const ACKNOWLEDGEMENTS = [
   "I understand this member will have full access to the admin dashboard.",
@@ -30,6 +31,9 @@ export default function GrantAdminDialog({
   const [step, setStep] = useState<1 | 2>(1);
   const [checks, setChecks] = useState<boolean[]>(() => ACKNOWLEDGEMENTS.map(() => false));
   const [typed, setTyped] = useState("");
+  // Only portal after mount so document.body exists (and to stay SSR-safe).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Reset every time the dialog (re)opens so a previous run never leaks through.
   useEffect(() => {
@@ -50,7 +54,7 @@ export default function GrantAdminDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [isOpen, onCancel]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const allChecked = checks.every(Boolean);
   const nameMatches = typed.trim() === memberName.trim();
@@ -59,9 +63,12 @@ export default function GrantAdminDialog({
   const toggle = (i: number) =>
     setChecks((prev) => prev.map((v, idx) => (idx === i ? !v : v)));
 
-  return (
+  // Portal to <body> so no transformed/animated ancestor (e.g. a fade-up row)
+  // can become the containing block for this fixed overlay — that's what pushed
+  // the card off-centre and under the navbar. On body it's truly viewport-fixed.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] overflow-y-auto bg-black/70 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="Grant Admin access"
@@ -181,6 +188,7 @@ export default function GrantAdminDialog({
         )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
