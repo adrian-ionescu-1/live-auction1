@@ -18,6 +18,7 @@ export class AuctionEngine {
         id: p.id,
         name: p.name || 'Unknown Player',
         wn8_30d: Number(p.wn8_30d) || 0,
+        battles: Number(p.battles) || 0,
         winrate: Number(p.winrate) || 0,
         avg_damage: Number(p.avg_damage) || 0,
         basePrice: Number(p.base_price) || 100,
