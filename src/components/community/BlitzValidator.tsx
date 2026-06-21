@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BlitzRegion, BlitzStats } from "@/types/community-event.types";
 import { BlitzAccount, BlitzClient } from "@/services/blitzClient";
 
@@ -38,16 +38,24 @@ export default function BlitzValidator({
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Guards against a slow earlier request overwriting a newer one's results.
+  const reqId = useRef(0);
 
-  const search = async () => {
-    if (name.trim().length < 3) {
-      setError("Type at least 3 characters of the in-game name.");
+  const runSearch = async (query: string) => {
+    const trimmed = query.trim();
+    if (trimmed.length < 3) {
+      setResults([]);
+      setSearched(false);
+      setBusy(false);
+      setError(null);
       return;
     }
+    const id = ++reqId.current;
     setBusy(true);
     setError(null);
     setSearched(true);
-    const res = await BlitzClient.search(region, name);
+    const res = await BlitzClient.search(region, trimmed);
+    if (id !== reqId.current) return; // a newer keystroke superseded this one
     setBusy(false);
     if (res.error) {
       setError(res.error);
@@ -56,6 +64,16 @@ export default function BlitzValidator({
     }
     setResults(res.players);
   };
+
+  // Live search: query the Wargaming API as the admin/member types (debounced),
+  // so matching accounts appear without pressing a button. Below 3 characters
+  // the list clears (the WG API needs at least 3).
+  useEffect(() => {
+    if (value) return; // already validated — nothing to search
+    const handle = setTimeout(() => void runSearch(name), 350);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, region, value]);
 
   const pick = async (acc: BlitzAccount) => {
     setBusy(true);
@@ -109,28 +127,28 @@ export default function BlitzValidator({
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="relative">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void search();
-            }
+            if (e.key === "Enter") e.preventDefault();
           }}
-          placeholder="In-game name"
-          className="w-full min-w-0 rounded-xl bg-black/40 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+          placeholder="Type the in-game name…"
+          autoComplete="off"
+          className="w-full min-w-0 rounded-xl bg-black/40 px-4 py-3 pr-10 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
         />
-        <button
-          type="button"
-          onClick={search}
-          disabled={busy}
-          className="shrink-0 rounded-xl bg-emerald-500/15 px-4 py-2 text-sm font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25 disabled:opacity-50"
-        >
-          {busy ? "…" : "Search"}
-        </button>
+        {busy && (
+          <span
+            aria-hidden
+            className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-emerald-300/40 border-t-emerald-300"
+          />
+        )}
       </div>
+
+      {name.trim().length > 0 && name.trim().length < 3 && (
+        <p className="text-xs text-zinc-500">Type at least 3 characters to search.</p>
+      )}
 
       {error && <p className="text-xs font-semibold text-amber-200">{error}</p>}
 

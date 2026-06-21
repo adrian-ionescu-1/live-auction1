@@ -8,7 +8,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { CommunityEventsService } from "@/services/communityEventsService";
-import { CommunityEvent, CommunityRegistration } from "@/types/community-event.types";
+import {
+  BlitzRegion,
+  CommunityEvent,
+  CommunityRegistration,
+} from "@/types/community-event.types";
 import { roleMeta } from "@/components/admin/roleMeta";
 import { categoryHashtag } from "@/components/admin/communityEventMeta";
 import RegistrationFormDialog from "@/components/community/RegistrationFormDialog";
@@ -60,9 +64,13 @@ export default function CommunityParticipantsPage() {
   const [removing, setRemoving] = useState<CommunityRegistration | null>(null);
   const [clearing, setClearing] = useState<CommunityEvent | null>(null);
   const [clearConfirming, setClearConfirming] = useState(false);
+  const [deletingList, setDeletingList] = useState<CommunityEvent | null>(null);
   const [importingTo, setImportingTo] = useState<CommunityEvent | null>(null);
   const [creatingList, setCreatingList] = useState(false);
   const [newListName, setNewListName] = useState("");
+  const [newListRegion, setNewListRegion] = useState<"" | BlitzRegion>("");
+  // Live text filter applied to the currently expanded list's participants.
+  const [filter, setFilter] = useState("");
 
   const loadEvents = useCallback(async () => {
     const list = await CommunityEventsService.listEvents();
@@ -80,7 +88,10 @@ export default function CommunityParticipantsPage() {
     if (!name) return;
     setBusy(true);
     setError(null);
-    const res = await CommunityEventsService.createParticipantList(name);
+    const res = await CommunityEventsService.createParticipantList(
+      name,
+      newListRegion || null
+    );
     setBusy(false);
     if (!res.success || !res.eventId) {
       setError(res.error ?? "Could not create the list");
@@ -88,12 +99,15 @@ export default function CommunityParticipantsPage() {
     }
     setCreatingList(false);
     setNewListName("");
+    setNewListRegion("");
     const list = await loadEvents();
     const created = list.find((e) => e.id === res.eventId) ?? null;
     if (created) {
+      // Open the new (empty) list so the admin can add players via Blitz
+      // validation or import a file — no longer forced into the import dialog.
       setOpenId(created.id);
+      setFilter("");
       setRegs((prev) => ({ ...prev, [created.id]: [] }));
-      setImportingTo(created); // jump straight into importing participants
     }
   };
 
@@ -110,6 +124,7 @@ export default function CommunityParticipantsPage() {
       return;
     }
     setOpenId(eventId);
+    setFilter("");
     if (!regs[eventId]) void loadRegs(eventId);
   };
 
@@ -209,6 +224,28 @@ export default function CommunityParticipantsPage() {
       setClearConfirming(false);
       await loadRegs(eventId);
     } else {
+      setError(res.error ?? "Could not clear the list");
+    }
+  };
+
+  // Permanently delete a standalone list (kind === 'list'), even when empty.
+  // A single confirm — this is the only place a list is removed for good.
+  const handleDeleteList = async () => {
+    if (!deletingList) return;
+    setBusy(true);
+    const id = deletingList.id;
+    const res = await CommunityEventsService.deleteEvent(id);
+    setBusy(false);
+    if (res.success) {
+      setDeletingList(null);
+      if (openId === id) setOpenId(null);
+      setRegs((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      await loadEvents();
+    } else {
       setError(res.error ?? "Could not delete the list");
     }
   };
@@ -255,6 +292,15 @@ export default function CommunityParticipantsPage() {
           events.map((ev) => {
             const isOpen = openId === ev.id;
             const list = regs[ev.id] ?? [];
+            // Live filter on the open list (by display name / in-game name).
+            const q = isOpen ? filter.trim().toLowerCase() : "";
+            const visible = q
+              ? list.filter(
+                  (r) =>
+                    r.displayName.toLowerCase().includes(q) ||
+                    (r.playerName ?? "").toLowerCase().includes(q)
+                )
+              : list;
             return (
               <div
                 key={ev.id}
@@ -310,18 +356,43 @@ export default function CommunityParticipantsPage() {
                       >
                         Import CSV/Excel
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setClearing(ev);
-                          setClearConfirming(false);
-                        }}
-                        disabled={list.length === 0}
-                        className="rounded-xl bg-red-500/15 px-3 py-2 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/25 disabled:opacity-50"
-                      >
-                        Delete list
-                      </button>
+                      {ev.kind === "list" ? (
+                        // Standalone list: delete the whole thing (works empty too),
+                        // single confirm. This is the only place a list disappears.
+                        <button
+                          type="button"
+                          onClick={() => setDeletingList(ev)}
+                          className="rounded-xl bg-red-500/15 px-3 py-2 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/25"
+                        >
+                          Delete list
+                        </button>
+                      ) : (
+                        // Event list: only clear the registrations, keep the event.
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClearing(ev);
+                            setClearConfirming(false);
+                          }}
+                          disabled={list.length === 0}
+                          className="rounded-xl bg-red-500/15 px-3 py-2 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/25 disabled:opacity-50"
+                        >
+                          Clear list
+                        </button>
+                      )}
                     </div>
+
+                    {(regs[ev.id]?.length ?? 0) > 0 && (
+                      <div className="relative">
+                        <input
+                          value={filter}
+                          onChange={(e) => setFilter(e.target.value)}
+                          placeholder="Filter participants by name…"
+                          autoComplete="off"
+                          className="w-full min-w-0 rounded-xl bg-black/30 px-4 py-2.5 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                        />
+                      </div>
+                    )}
 
                     {regLoading && !regs[ev.id] ? (
                       <div className="h-20 animate-pulse rounded-2xl bg-black/25" />
@@ -329,9 +400,13 @@ export default function CommunityParticipantsPage() {
                       <p className="rounded-2xl bg-black/25 p-5 text-center text-sm text-zinc-400 ring-1 ring-white/10">
                         Nobody has registered yet.
                       </p>
+                    ) : visible.length === 0 ? (
+                      <p className="rounded-2xl bg-black/25 p-5 text-center text-sm text-zinc-400 ring-1 ring-white/10">
+                        No participants match &ldquo;{filter.trim()}&rdquo;.
+                      </p>
                     ) : (
                       <ul className="space-y-2">
-                        {list.map((reg) => (
+                        {visible.map((reg) => (
                           <li
                             key={reg.id}
                             className="min-w-0 rounded-2xl bg-black/25 p-3 ring-1 ring-white/10"
@@ -449,7 +524,7 @@ export default function CommunityParticipantsPage() {
         onCancel={() => setEditing(null)}
       />
 
-      {/* Name a new standalone list, then jump into importing participants. */}
+      {/* Name a new standalone list, optionally pick a Blitz region. */}
       {creatingList &&
         createPortal(
           <div
@@ -461,27 +536,58 @@ export default function CommunityParticipantsPage() {
             <div className="w-full max-w-md rounded-3xl bg-zinc-950/95 p-6 ring-1 ring-white/10 shadow-2xl">
               <h3 className="text-lg font-extrabold text-zinc-100">Add participant list</h3>
               <p className="mt-1 text-sm text-zinc-400">
-                A standalone list — no event needed. After naming it you can import a CSV/Excel or
-                add participants by hand. It can be used when creating an auction.
+                A standalone list — no event needed. Add players by validating their Blitz account,
+                by hand, or import a CSV/Excel. It can be used when creating an auction.
               </p>
-              <input
-                value={newListName}
-                onChange={(e) => setNewListName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void handleCreateList();
-                  }
-                }}
-                placeholder="List name (e.g. EU qualifiers)"
-                maxLength={120}
-                autoFocus
-                className="mt-4 w-full min-w-0 rounded-xl bg-black/40 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-              />
+              <label className="mt-4 block">
+                <span className="block text-sm font-semibold text-zinc-300">List name</span>
+                <input
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleCreateList();
+                    }
+                  }}
+                  placeholder="List name (e.g. EU qualifiers)"
+                  maxLength={120}
+                  autoFocus
+                  className="mt-1.5 w-full min-w-0 rounded-xl bg-black/40 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                />
+              </label>
+              <label className="mt-4 block">
+                <span className="block text-sm font-semibold text-zinc-300">Blitz region</span>
+                <span className="mt-0.5 block text-xs text-zinc-500">
+                  Pick a region to add players by validating a real WoT Blitz account. Leave as
+                  &ldquo;No validation&rdquo; for a plain list (manual / import only).
+                </span>
+                <select
+                  value={newListRegion}
+                  onChange={(e) => setNewListRegion(e.target.value as "" | BlitzRegion)}
+                  className="mt-1.5 w-full min-w-0 rounded-xl bg-zinc-900 px-3 py-3 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                >
+                  <option value="" className="bg-zinc-900 text-zinc-100">
+                    No validation
+                  </option>
+                  <option value="eu" className="bg-zinc-900 text-zinc-100">
+                    EU
+                  </option>
+                  <option value="na" className="bg-zinc-900 text-zinc-100">
+                    NA
+                  </option>
+                  <option value="asia" className="bg-zinc-900 text-zinc-100">
+                    ASIA
+                  </option>
+                </select>
+              </label>
               <div className="mt-5 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setCreatingList(false)}
+                  onClick={() => {
+                    setCreatingList(false);
+                    setNewListRegion("");
+                  }}
                   disabled={busy}
                   className="flex-1 rounded-2xl bg-white/5 px-4 py-3 text-sm font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10 disabled:opacity-60"
                 >
@@ -493,7 +599,7 @@ export default function CommunityParticipantsPage() {
                   disabled={busy || !newListName.trim()}
                   className="flex-1 rounded-2xl bg-emerald-500/20 px-4 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {busy ? "Creating…" : "Create & import"}
+                  {busy ? "Creating…" : "Create list"}
                 </button>
               </div>
             </div>
@@ -522,10 +628,10 @@ export default function CommunityParticipantsPage() {
         onCancel={() => setRemoving(null)}
       />
 
-      {/* Delete the whole list — step 1: type the event title. */}
+      {/* Clear an event's registrations — step 1: type the event title. */}
       <ConfirmByNameDialog
         eventName={clearing?.title ?? ""}
-        title="Delete participant list"
+        title="Clear participant list"
         tone="danger"
         confirmLabel="Continue"
         description={
@@ -541,19 +647,31 @@ export default function CommunityParticipantsPage() {
         onCancel={() => setClearing(null)}
       />
 
-      {/* Delete the whole list — step 2: final confirm. */}
+      {/* Clear an event's registrations — step 2: final confirm. */}
       <ConfirmDialog
         isOpen={clearConfirming}
-        title="Delete the whole list?"
+        title="Clear the whole list?"
         message={`There's no undo. Every registration for "${clearing?.title ?? ""}" will be permanently deleted.`}
         tone="danger"
-        confirmLabel="Yes, delete the list"
+        confirmLabel="Yes, clear the list"
         busy={busy}
         onConfirm={handleClear}
         onCancel={() => {
           setClearing(null);
           setClearConfirming(false);
         }}
+      />
+
+      {/* Delete a standalone list entirely — single confirm, works when empty. */}
+      <ConfirmDialog
+        isOpen={deletingList !== null}
+        title="Delete this list?"
+        message={`"${deletingList?.title ?? ""}" and all its participants will be permanently removed. This can't be undone.`}
+        tone="danger"
+        confirmLabel="Yes, delete the list"
+        busy={busy}
+        onConfirm={handleDeleteList}
+        onCancel={() => setDeletingList(null)}
       />
     </>
   );
