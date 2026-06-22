@@ -117,6 +117,8 @@ export default function EventsListPage() {
   const [reopening, setReopening] = useState<AuctionEvent | null>(null);
   const [reopenConfirming, setReopenConfirming] = useState(false);
   const [reopenBusy, setReopenBusy] = useState(false);
+  const [finishing, setFinishing] = useState<AuctionEvent | null>(null);
+  const [finishBusy, setFinishBusy] = useState(false);
 
   const loadBase = useCallback(async () => {
     const [evs, ms, live] = await Promise.all([
@@ -216,6 +218,19 @@ export default function EventsListPage() {
     }
   };
 
+  const handleFinish = async () => {
+    if (!finishing) return;
+    setFinishBusy(true);
+    const res = await EventsService.finishEvent(finishing.id);
+    setFinishBusy(false);
+    if (res.success) {
+      const id = finishing.id;
+      setFinishing(null);
+      if (selectedId === id) await loadResults(id);
+      await loadBase();
+    }
+  };
+
   const enrolledIds = new Set(members.map((m) => m.profileId));
   const candidates = allMembers.filter((m) => !enrolledIds.has(m.id));
 
@@ -278,8 +293,8 @@ export default function EventsListPage() {
                         </span>
                       )}
                       {ev.status === "finished" && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-400/25">
-                          ✓ Finished
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-500/20 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-cyan-100 ring-1 ring-cyan-400/40">
+                          <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" /> Closed
                         </span>
                       )}
                     </div>
@@ -388,14 +403,24 @@ export default function EventsListPage() {
                           Reopen event →
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => handleMakeLive(ev.id)}
-                          className="rounded-2xl bg-emerald-500/20 px-5 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] disabled:opacity-50"
-                        >
-                          {isLive ? "Open auction room →" : "Make live & open room →"}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => handleMakeLive(ev.id)}
+                            className="rounded-2xl bg-emerald-500/20 px-5 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98] disabled:opacity-50"
+                          >
+                            {isLive ? "Open auction room →" : "Make live & open room →"}
+                          </button>
+                          {/* Close the auction directly (no scheduled end date). */}
+                          <button
+                            type="button"
+                            onClick={() => setFinishing(ev)}
+                            className="rounded-2xl bg-cyan-500/15 px-5 py-3 text-sm font-bold text-cyan-200 ring-1 ring-cyan-400/25 transition hover:bg-cyan-500/25 active:scale-[0.98]"
+                          >
+                            Finalize auction
+                          </button>
+                        </>
                       )}
                       <button
                         type="button"
@@ -447,6 +472,27 @@ export default function EventsListPage() {
         busy={deleteBusy}
         onConfirm={handleDelete}
         onCancel={closeDelete}
+      />
+
+      {/* Finalize — type the auction name to confirm closing it. */}
+      <ConfirmByNameDialog
+        eventName={finishing?.name ?? ""}
+        title="Finalize auction"
+        tone="primary"
+        confirmLabel="Finalize"
+        description={
+          <>
+            Close{" "}
+            <span className="font-semibold text-zinc-200">{finishing?.name}</span> now. It moves
+            to your history as <span className="font-semibold text-zinc-200">Closed</span>, and
+            bidders see their results as final. Players already won are kept. You can reopen it
+            later.
+          </>
+        }
+        isOpen={finishing !== null}
+        busy={finishBusy}
+        onConfirm={handleFinish}
+        onCancel={() => setFinishing(null)}
       />
 
       {/* Reopen — step 1: type the event name to confirm. */}

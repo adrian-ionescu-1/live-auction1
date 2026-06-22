@@ -230,6 +230,20 @@ export class EventsService {
     return { success: false, eventId: null, error: "Unexpected response" };
   }
 
+  /** Finish (close) an auction now — marks it finished; results are kept. */
+  static async finishEvent(
+    eventId: string
+  ): Promise<{ success: boolean; error: string | null }> {
+    const { data, error } = await supabase.rpc("admin_finish_event", {
+      p_event_id: eventId,
+    });
+    if (error) return { success: false, error: error.message };
+    if (data && typeof data === "object") {
+      return { success: data.success === true, error: data.error ?? null };
+    }
+    return { success: true, error: null };
+  }
+
   /** Delete an event (unbinds + idles the room if it was live). */
   static async deleteEvent(
     eventId: string
