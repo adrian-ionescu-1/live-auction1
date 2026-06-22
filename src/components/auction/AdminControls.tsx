@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import { EventsService } from '@/services/eventsService';
@@ -227,10 +228,21 @@ export default function AdminControls() {
                 Events page (Reopen, gated by typed-name + final confirm), so we
                 don't expose a reset button here that could wipe state by accident. */}
             {status === 'finished' ? (
-              <p className="rounded-2xl bg-white/5 py-3 px-4 text-center text-xs text-zinc-400 ring-1 ring-white/10">
-                Auction finished. To run it again, reopen the event from{' '}
-                <span className="font-semibold text-zinc-200">Events</span>.
-              </p>
+              <div className="rounded-2xl bg-emerald-500/10 p-4 text-center ring-1 ring-emerald-400/25">
+                <div className="text-2xl">🏁</div>
+                <p className="mt-1 text-sm font-extrabold text-emerald-100">
+                  Auction ended successfully
+                </p>
+                <p className="mt-1 text-xs text-emerald-200/80">
+                  Nice work — every player has been settled. You can head back to your dashboard.
+                </p>
+                <Link
+                  href="/admin"
+                  className="mt-3 inline-flex items-center justify-center rounded-2xl bg-emerald-500/20 px-5 py-2.5 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98]"
+                >
+                  ← Back to dashboard
+                </Link>
+              </div>
             ) : (
               <button
                 onClick={handleResetClick}
