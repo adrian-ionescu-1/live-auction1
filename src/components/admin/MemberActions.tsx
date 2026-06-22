@@ -23,6 +23,7 @@ import { ASSIGNABLE_ROLES, primaryRole, roleMeta } from "./roleMeta";
 const TOGGLE_ROLES = ASSIGNABLE_ROLES.filter((r) => r !== "guest");
 import GrantAdminDialog from "./GrantAdminDialog";
 import ConfirmActionDialog from "./ConfirmActionDialog";
+import FlagPicker from "@/components/community/FlagPicker";
 
 export default function MemberActions({
   member,
@@ -41,6 +42,7 @@ export default function MemberActions({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [nameInput, setNameInput] = useState(member.username);
+  const [country, setCountry] = useState<string | null>(member.defaultCountry);
   // Granting Admin is gated behind the two-step danger dialog instead of being
   // applied on click like every other role.
   const [confirmAdmin, setConfirmAdmin] = useState(false);
@@ -62,6 +64,20 @@ export default function MemberActions({
   useEffect(() => {
     if (open) setNameInput(member.username);
   }, [open, member.username]);
+
+  // Keep the country picker in sync with the member each time it opens.
+  useEffect(() => {
+    if (open) setCountry(member.defaultCountry);
+  }, [open, member.defaultCountry]);
+
+  // Persist the default country immediately on each pick / clear / random.
+  const saveCountry = async (code: string | null) => {
+    setCountry(code);
+    setBusy(true);
+    const ok = await MembersService.setCountry(member.id, code);
+    setBusy(false);
+    if (ok) onChange({ ...member, defaultCountry: code });
+  };
 
   // Anchor the fixed popover to the trigger: align right edges, flip above when
   // there's more room up top, and cap its height to the free space so a tall
@@ -294,6 +310,16 @@ export default function MemberActions({
                 </p>
               </>
             )}
+          </div>
+
+          {/* Default country tag — pre-fills this member's team in a tournament. */}
+          <div className="border-b border-white/10 p-1.5">
+            <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">
+              Country tag
+            </div>
+            <div className="px-1 pb-1">
+              <FlagPicker value={country} onChange={saveCountry} />
+            </div>
           </div>
 
           {showRoles && (

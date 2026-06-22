@@ -17,7 +17,7 @@ export class MembersService {
   static async getAllMembers(): Promise<Member[]> {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, username, display_name, avatar_url, role, roles, banned")
+      .select("id, username, display_name, avatar_url, role, roles, banned, default_country")
       .order("username", { ascending: true });
 
     if (error) {
@@ -34,6 +34,7 @@ export class MembersService {
         role: string;
         roles: string[] | null;
         banned: boolean | null;
+        default_country: string | null;
       };
       const original = r.username ?? "guest";
       const displayName = r.display_name ?? null;
@@ -49,6 +50,7 @@ export class MembersService {
             ? r.roles.map((x) => x.toLowerCase())
             : [r.role.toLowerCase()],
         banned: !!r.banned,
+        defaultCountry: r.default_country ?? null,
       };
     });
   }
@@ -125,6 +127,20 @@ export class MembersService {
     // The RPC returns { success, error } — treat an explicit failure as false.
     if (data && typeof data === "object" && data.success === false) {
       console.error("Error deleting member:", data.error);
+      return false;
+    }
+    return true;
+  }
+
+  /** Admin: set a member's default country tag (ISO alpha-2), or clear it. */
+  static async setCountry(memberId: string, country: string | null): Promise<boolean> {
+    const { error } = await supabase.rpc("admin_set_member_country", {
+      p_member_id: memberId,
+      p_country: country,
+      p_admin_key: adminKey(),
+    });
+    if (error) {
+      console.error("Error updating member country:", error);
       return false;
     }
     return true;
