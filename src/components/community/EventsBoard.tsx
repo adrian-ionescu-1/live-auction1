@@ -61,6 +61,8 @@ export default function EventsBoard({
     if (grouped.past.length) return "past";
     return "current";
   });
+  // Which card is expanded (collapsed by default, like the admin auctions list).
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const list = grouped[tab];
 
@@ -115,19 +117,48 @@ export default function EventsBoard({
             {emptyHint && <p className="mt-1 text-xs text-zinc-500">{emptyHint}</p>}
           </div>
         ) : (
-          list.map((ev) => (
-            <div
-              key={ev.id}
-              className="min-w-0 animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6"
-            >
-              {showBadges && (
-                <div className="mb-3 flex justify-center">
-                  <PhaseBadge phase={tab} />
-                </div>
-              )}
-              {renderEvent(ev)}
-            </div>
-          ))
+          list.map((ev) => {
+            const open = openId === ev.id;
+            return (
+              <div
+                key={ev.id}
+                className="min-w-0 animate-fade-up rounded-3xl bg-white/5 ring-1 ring-white/10"
+              >
+                {/* Condensed header — click to expand the full card. */}
+                <button
+                  type="button"
+                  onClick={() => setOpenId(open ? null : ev.id)}
+                  aria-expanded={open}
+                  className="flex w-full items-center gap-3 rounded-3xl px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+                >
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <span className="truncate text-base font-extrabold text-zinc-100">
+                      {ev.title}
+                    </span>
+                    {showBadges ? (
+                      <PhaseBadge phase={tab} />
+                    ) : (
+                      tab === "past" && (
+                        <span className="rounded-full bg-zinc-500/15 px-2.5 py-0.5 text-[11px] font-bold text-zinc-300 ring-1 ring-white/10">
+                          Closed
+                        </span>
+                      )
+                    )}
+                  </div>
+                  <span
+                    aria-hidden
+                    className={`shrink-0 text-zinc-500 transition ${open ? "rotate-180" : ""}`}
+                  >
+                    ▾
+                  </span>
+                </button>
+
+                {open && (
+                  <div className="border-t border-white/10 px-5 py-5">{renderEvent(ev)}</div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>

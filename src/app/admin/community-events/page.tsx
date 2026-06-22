@@ -14,7 +14,7 @@ import EditCommunityEventDialog from "@/components/community/EditCommunityEventD
 import DatePromptDialog from "@/components/community/DatePromptDialog";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ConfirmByNameDialog from "@/components/admin/ConfirmByNameDialog";
-import { localInputValue, registrationState } from "@/components/admin/communityEventMeta";
+import { eventPhase, localInputValue, registrationState } from "@/components/admin/communityEventMeta";
 
 export default function CommunityEventsListPage() {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
@@ -27,6 +27,7 @@ export default function CommunityEventsListPage() {
   const [reopening, setReopening] = useState<CommunityEvent | null>(null);
   const [extendingReg, setExtendingReg] = useState<CommunityEvent | null>(null);
   const [closing, setClosing] = useState<CommunityEvent | null>(null);
+  const [finishingEvent, setFinishingEvent] = useState<CommunityEvent | null>(null);
   const [deleting, setDeleting] = useState<CommunityEvent | null>(null);
 
   const load = useCallback(async () => {
@@ -110,6 +111,19 @@ export default function CommunityEventsListPage() {
     }
   };
 
+  const handleFinishEvent = async () => {
+    if (!finishingEvent) return;
+    setBusy(true);
+    const res = await CommunityEventsService.finishEvent(finishingEvent.id);
+    setBusy(false);
+    if (res.success) {
+      setFinishingEvent(null);
+      await load();
+    } else {
+      setError(res.error ?? "Could not close the event");
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleting) return;
     setBusy(true);
@@ -170,8 +184,9 @@ export default function CommunityEventsListPage() {
               );
               const regOpen = regState === "open";
               const regClosed = regState === "closed";
+              const ended = eventPhase(ev) === "past";
               return (
-              <CommunityEventView event={ev} showRoles>
+              <CommunityEventView event={ev} showRoles hideTitle>
                 <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
                   <button
                     type="button"
@@ -216,6 +231,16 @@ export default function CommunityEventsListPage() {
                     className={`${btn} bg-amber-500/15 text-amber-200 ring-amber-400/25 hover:bg-amber-500/25`}
                   >
                     Close registration
+                  </button>
+                  {/* Finalize: end the whole event now → moves to the Ended tab. */}
+                  <button
+                    type="button"
+                    onClick={() => setFinishingEvent(ev)}
+                    disabled={ended}
+                    title={ended ? "Event already ended" : undefined}
+                    className={`${btn} bg-cyan-500/15 text-cyan-200 ring-cyan-400/25 hover:bg-cyan-500/25`}
+                  >
+                    Finalize event
                   </button>
                   <Link
                     href="/admin/community-events/participants"
@@ -319,6 +344,27 @@ export default function CommunityEventsListPage() {
         busy={busy}
         onConfirm={handleClose}
         onCancel={() => setClosing(null)}
+      />
+
+      <ConfirmByNameDialog
+        isOpen={finishingEvent !== null}
+        eventName={finishingEvent?.title ?? ""}
+        title="Finalize event"
+        tone="primary"
+        confirmLabel="Finalize"
+        busy={busy}
+        description={
+          <>
+            End{" "}
+            <span className="font-semibold text-zinc-200">{finishingEvent?.title}</span> now. It
+            moves to the <span className="font-semibold text-zinc-200">Ended</span> tab for you and
+            for members, and registration closes. You can bring it back later with{" "}
+            <span className="font-semibold text-zinc-200">Extend event</span> /{" "}
+            <span className="font-semibold text-zinc-200">Reopen registration</span>.
+          </>
+        }
+        onConfirm={handleFinishEvent}
+        onCancel={() => setFinishingEvent(null)}
       />
 
       <ConfirmByNameDialog

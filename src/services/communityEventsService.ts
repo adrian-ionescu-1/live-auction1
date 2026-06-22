@@ -286,6 +286,15 @@ export class CommunityEventsService {
     return unwrap(data, error);
   }
 
+  /** Finish (close) the whole event now — it moves to the Ended tab. */
+  static async finishEvent(eventId: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_finish_community_event", {
+      p_event_id: eventId,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
   /** Close registration immediately, even if the window had not expired. */
   static async closeRegistration(eventId: string): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("admin_close_community_registration", {
