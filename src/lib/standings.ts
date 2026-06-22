@@ -28,6 +28,7 @@ export function computeStandings(
 
   for (const m of matches) {
     if (m.status !== "played" || m.homeScore == null || m.awayScore == null) continue;
+    if (!m.homeTeamId || !m.awayTeamId) continue;
     const home = rows.get(m.homeTeamId);
     const away = rows.get(m.awayTeamId);
     if (!home || !away) continue;

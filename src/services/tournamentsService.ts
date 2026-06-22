@@ -6,6 +6,7 @@ import {
   TournamentRound,
   TournamentStatus,
   TournamentTeam,
+  TournamentTeamMember,
   TournamentTeamPlayer,
 } from "@/types/tournament.types";
 
@@ -41,6 +42,29 @@ function mapTournament(row: Record<string, unknown>): Tournament {
     createdAt: (row.created_at as string) ?? new Date().toISOString(),
     updatedAt: (row.updated_at as string) ?? new Date().toISOString(),
     finishedAt: (row.finished_at as string) ?? null,
+    teamFormat: (row.team_format as string) ?? null,
+    region: (row.region as string) ?? null,
+    description: (row.description as string) ?? null,
+    registrationOpensAt: (row.registration_opens_at as string) ?? null,
+    registrationClosesAt: (row.registration_closes_at as string) ?? null,
+    stage: (row.stage as Tournament["stage"]) ?? null,
+    groupCount: row.group_count != null ? Number(row.group_count) : null,
+    advancePerGroup: row.advance_per_group != null ? Number(row.advance_per_group) : null,
+  };
+}
+
+function mapTeamMember(row: Record<string, unknown>): TournamentTeamMember {
+  return {
+    id: row.id as string,
+    teamId: row.team_id as string,
+    slot: Number(row.slot) || 0,
+    isReserve: !!row.is_reserve,
+    playerName: (row.player_name as string) ?? "Player",
+    accountId: row.account_id != null ? Number(row.account_id) : null,
+    region: (row.region as string) ?? null,
+    winrate: row.winrate != null ? Number(row.winrate) : null,
+    battles: row.battles != null ? Number(row.battles) : null,
+    avgDamage: row.avg_damage != null ? Number(row.avg_damage) : null,
   };
 }
 
@@ -57,6 +81,9 @@ function mapTeam(row: Record<string, unknown>): TournamentTeam {
   const playersRaw = Array.isArray(row.tournament_team_players)
     ? (row.tournament_team_players as Record<string, unknown>[])
     : [];
+  const membersRaw = Array.isArray(row.tournament_team_members)
+    ? (row.tournament_team_members as Record<string, unknown>[])
+    : [];
   return {
     id: row.id as string,
     tournamentId: row.tournament_id as string,
@@ -69,6 +96,14 @@ function mapTeam(row: Record<string, unknown>): TournamentTeam {
     players: playersRaw
       .map(mapTeamPlayer)
       .sort((a, b) => b.amount - a.amount || a.playerName.localeCompare(b.playerName)),
+    symbol: (row.symbol as string) ?? null,
+    captainProfileId: (row.captain_profile_id as string) ?? null,
+    locked: !!row.locked,
+    groupLabel: (row.group_label as string) ?? null,
+    strength: row.strength != null ? Number(row.strength) : null,
+    members: membersRaw
+      .map(mapTeamMember)
+      .sort((a, b) => Number(a.isReserve) - Number(b.isReserve) || a.slot - b.slot),
   };
 }
 
@@ -87,8 +122,8 @@ function mapMatch(row: Record<string, unknown>): TournamentMatch {
     id: row.id as string,
     tournamentId: row.tournament_id as string,
     roundId: (row.round_id as string) ?? null,
-    homeTeamId: row.home_team_id as string,
-    awayTeamId: row.away_team_id as string,
+    homeTeamId: (row.home_team_id as string) ?? null,
+    awayTeamId: (row.away_team_id as string) ?? null,
     scheduledAt: (row.scheduled_at as string) ?? null,
     homeScore: row.home_score != null ? Number(row.home_score) : null,
     awayScore: row.away_score != null ? Number(row.away_score) : null,
@@ -97,6 +132,13 @@ function mapMatch(row: Record<string, unknown>): TournamentMatch {
     topDamageTeamId: (row.top_damage_team_id as string) ?? null,
     topKillPlayer: (row.top_kill_player as string) ?? null,
     topKillTeamId: (row.top_kill_team_id as string) ?? null,
+    stage: (row.stage as string) ?? null,
+    groupLabel: (row.group_label as string) ?? null,
+    bracketRound: row.bracket_round != null ? Number(row.bracket_round) : null,
+    bracketPosition: row.bracket_position != null ? Number(row.bracket_position) : null,
+    nextMatchId: (row.next_match_id as string) ?? null,
+    nextSlot: (row.next_slot as string) ?? null,
+    winnerTeamId: (row.winner_team_id as string) ?? null,
   };
 }
 
@@ -141,7 +183,7 @@ export class TournamentsService {
     const [teamsRes, roundsRes, matchesRes] = await Promise.all([
       supabase
         .from("tournament_teams")
-        .select("*, tournament_team_players(*)")
+        .select("*, tournament_team_players(*), tournament_team_members(*)")
         .eq("tournament_id", tournamentId)
         .order("seed", { ascending: true }),
       supabase
@@ -399,4 +441,178 @@ export class TournamentsService {
     });
     return unwrap(data, error);
   }
+
+  // ── WoT Blitz tournaments ────────────────────────────────────────────────
+
+  /** Admin: create a registration-based WoT Blitz tournament. */
+  static async createWbTournament(input: {
+    name: string;
+    teamFormat: string;
+    region: string | null;
+    description: string | null;
+    startsAt: string | null;
+    registrationOpensAt: string | null;
+    registrationClosesAt: string | null;
+  }): Promise<{ success: boolean; tournamentId: string | null; error: string | null }> {
+    const { data, error } = await supabase.rpc("admin_create_wb_tournament", {
+      p_name: input.name,
+      p_team_format: input.teamFormat,
+      p_region: input.region,
+      p_description: input.description,
+      p_starts_at: input.startsAt,
+      p_registration_opens_at: input.registrationOpensAt,
+      p_registration_closes_at: input.registrationClosesAt,
+      p_admin_key: adminKey(),
+    });
+    if (error) return { success: false, tournamentId: null, error: error.message };
+    const d = (data ?? {}) as Record<string, unknown>;
+    return {
+      success: d.success === true,
+      tournamentId: (d.tournament_id as string) ?? null,
+      error: (d.error as string) ?? null,
+    };
+  }
+
+  /** Member (captain): register a team with validated players. */
+  static async registerTeam(
+    tournamentId: string,
+    name: string,
+    symbol: string | null,
+    members: WbMemberInput[]
+  ): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("register_wb_team", {
+      p_tournament_id: tournamentId,
+      p_name: name,
+      p_symbol: symbol,
+      p_members: members,
+    });
+    return unwrap(data, error);
+  }
+
+  /** Member (captain): edit own team while registration is open. */
+  static async updateOwnTeam(
+    teamId: string,
+    name: string,
+    symbol: string | null,
+    members: WbMemberInput[]
+  ): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("update_wb_team", {
+      p_team_id: teamId,
+      p_name: name,
+      p_symbol: symbol,
+      p_members: members,
+    });
+    return unwrap(data, error);
+  }
+
+  /** Member (captain): close the team (no more edits). */
+  static async lockOwnTeam(teamId: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("lock_wb_team", { p_team_id: teamId });
+    return unwrap(data, error);
+  }
+
+  /** Member (captain): withdraw the team while registration is open. */
+  static async withdrawOwnTeam(teamId: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("withdraw_wb_team", { p_team_id: teamId });
+    return unwrap(data, error);
+  }
+
+  /** Admin: rename / re-symbol a team. */
+  static async adminUpdateWbTeam(
+    teamId: string,
+    name: string,
+    symbol: string | null
+  ): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_update_team", {
+      p_team_id: teamId,
+      p_name: name,
+      p_symbol: symbol,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
+  /** Admin: draw teams into groups (seeded) + create round-robin matches. */
+  static async generateGroups(
+    tournamentId: string,
+    groupCount: number
+  ): Promise<{ success: boolean; groups: number; teams: number; error: string | null }> {
+    const { data, error } = await supabase.rpc("admin_wb_generate_groups", {
+      p_tournament_id: tournamentId,
+      p_group_count: groupCount,
+      p_admin_key: adminKey(),
+    });
+    if (error) return { success: false, groups: 0, teams: 0, error: error.message };
+    const d = (data ?? {}) as Record<string, unknown>;
+    return {
+      success: d.success === true,
+      groups: Number(d.groups) || 0,
+      teams: Number(d.teams) || 0,
+      error: (d.error as string) ?? null,
+    };
+  }
+
+  /** Admin: build the single-elimination bracket from the group qualifiers. */
+  static async generateBracket(
+    tournamentId: string,
+    advancePerGroup: number
+  ): Promise<{ success: boolean; qualified: number; error: string | null }> {
+    const { data, error } = await supabase.rpc("admin_wb_generate_bracket", {
+      p_tournament_id: tournamentId,
+      p_advance_per_group: advancePerGroup,
+      p_admin_key: adminKey(),
+    });
+    if (error) return { success: false, qualified: 0, error: error.message };
+    const d = (data ?? {}) as Record<string, unknown>;
+    return {
+      success: d.success === true,
+      qualified: Number(d.qualified) || 0,
+      error: (d.error as string) ?? null,
+    };
+  }
+
+  /** Admin: set a match score (auto-advances the knockout winner). */
+  static async setMatchScore(
+    matchId: string,
+    homeScore: number,
+    awayScore: number
+  ): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_set_match_score", {
+      p_match_id: matchId,
+      p_home_score: homeScore,
+      p_away_score: awayScore,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
+  /** Admin: delete a WoT Blitz match. */
+  static async deleteWbMatch(matchId: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_delete_match", {
+      p_match_id: matchId,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
+  /** Admin: finalize — set the podium from the final and move to history. */
+  static async finalizeWb(tournamentId: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_finalize", {
+      p_tournament_id: tournamentId,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+}
+
+/** A team member as sent to the register/update RPCs. */
+export interface WbMemberInput {
+  slot: number;
+  is_reserve: boolean;
+  player_name: string;
+  account_id: number | null;
+  region: string | null;
+  winrate: number | null;
+  battles: number | null;
+  avg_damage: number | null;
 }

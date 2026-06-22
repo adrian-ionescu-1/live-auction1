@@ -91,8 +91,8 @@ function MatchRow({
   teamsById: Map<string, TournamentTeam>;
   onChanged: () => Promise<void> | void;
 }) {
-  const home = teamsById.get(match.homeTeamId);
-  const away = teamsById.get(match.awayTeamId);
+  const home = match.homeTeamId ? teamsById.get(match.homeTeamId) : undefined;
+  const away = match.awayTeamId ? teamsById.get(match.awayTeamId) : undefined;
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

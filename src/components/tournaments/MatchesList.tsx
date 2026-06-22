@@ -107,11 +107,11 @@ function MatchRow({
   teamsById: Map<string, TournamentTeam>;
 }) {
   const [openTeam, setOpenTeam] = useState<string | null>(null);
-  const home = teamsById.get(match.homeTeamId);
-  const away = teamsById.get(match.awayTeamId);
+  const home = match.homeTeamId ? teamsById.get(match.homeTeamId) : undefined;
+  const away = match.awayTeamId ? teamsById.get(match.awayTeamId) : undefined;
   const played = match.status === "played" && match.homeScore != null && match.awayScore != null;
 
-  const toggle = (id: string | undefined) => {
+  const toggle = (id: string | null | undefined) => {
     if (!id) return;
     setOpenTeam((cur) => (cur === id ? null : id));
   };
