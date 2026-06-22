@@ -24,13 +24,14 @@ import ExcludedScreen from "@/app/_components/ExcludedScreen";
 import Logo from "@/app/_components/Logo";
 import MemberEvents from "@/components/community/MemberEvents";
 import TournamentsView from "@/components/tournaments/TournamentsView";
+import MemberContactForm from "@/components/contact/MemberContactForm";
+import DiscordCard from "@/components/contact/DiscordCard";
 import MemberNav, { MemberNavItem } from "@/components/dashboard/MemberNav";
 import WelcomeSection from "@/components/dashboard/sections/WelcomeSection";
 import ProfileSection, { DashboardNotice } from "@/components/dashboard/sections/ProfileSection";
 import AuctionsSection from "@/components/dashboard/sections/AuctionsSection";
 import StreamingSection from "@/components/dashboard/sections/StreamingSection";
 import ResultsSection from "@/components/dashboard/sections/ResultsSection";
-import ComingSoonSection from "@/components/dashboard/sections/ComingSoonSection";
 
 const SEEN_KEY = "dashboard_seen_notices";
 
@@ -396,12 +397,21 @@ export default function DashboardPage() {
           )}
 
           {active === "contact" && (
-            <ComingSoonSection
-              icon="💬"
-              title="Contact & Support"
-              description="A place to reach the admins for help, report an issue or ask about an event. This is being built — for now, reach out on Discord."
-              bullets={["Support tickets", "FAQ & guides", "Report a problem", "Event questions"]}
-            />
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-extrabold text-zinc-100">Contact &amp; support</h2>
+                <p className="text-sm text-zinc-400">
+                  Send a request, report an issue or share an idea. I&apos;ll reply by email — or
+                  reach me on Discord for a faster answer.
+                </p>
+              </div>
+              <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-start">
+                <MemberContactForm
+                  initialName={profile.blitz?.nickname ?? profile.username}
+                />
+                <DiscordCard />
+              </div>
+            </div>
           )}
         </div>
       </div>
