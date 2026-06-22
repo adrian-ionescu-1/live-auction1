@@ -13,6 +13,7 @@ import { fmtDateTime } from "@/components/admin/communityEventMeta";
 import { computeStandings } from "@/lib/standings";
 import StandingsTable from "@/components/tournaments/StandingsTable";
 import MatchesList from "@/components/tournaments/MatchesList";
+import WbTournamentView from "@/components/tournaments/wb/WbTournamentView";
 
 const TABS: { id: TournamentPhase; label: string }[] = [
   { id: "upcoming", label: "Upcoming" },
@@ -42,15 +43,22 @@ function PhaseBadge({ phase }: { phase: TournamentPhase }) {
   );
 }
 
-function TournamentCard({ tournament }: { tournament: Tournament }) {
+function TournamentCard({
+  tournament,
+  myProfileId,
+}: {
+  tournament: Tournament;
+  myProfileId: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<TournamentDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [subTab, setSubTab] = useState<"standings" | "matches">("standings");
   const phase = tournamentPhase(tournament);
+  const isWb = tournament.format === "wotblitz_bracket";
 
   useEffect(() => {
-    if (!open || detail) return;
+    if (!open || detail || isWb) return;
     let cancelled = false;
     setLoading(true);
     TournamentsService.loadDetail(tournament.id).then((d) => {
@@ -62,7 +70,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
     return () => {
       cancelled = true;
     };
-  }, [open, detail, tournament.id]);
+  }, [open, detail, tournament.id, isWb]);
 
   const standings = useMemo(
     () => (detail ? computeStandings(detail.teams, detail.matches) : []),
@@ -96,7 +104,13 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
         </span>
       </button>
 
-      {open && (
+      {open && isWb && (
+        <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+          <WbTournamentView tournament={tournament} myProfileId={myProfileId} />
+        </div>
+      )}
+
+      {open && !isWb && (
         <div className="border-t border-white/10 px-4 py-4 sm:px-5">
           {tournament.startsAt && (
             <p className="mb-3 text-xs text-zinc-500">🗓️ Starts {fmtDateTime(tournament.startsAt)}</p>
@@ -134,7 +148,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
   );
 }
 
-export default function TournamentsView() {
+export default function TournamentsView({ myProfileId = null }: { myProfileId?: string | null }) {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -224,7 +238,9 @@ export default function TournamentsView() {
             </p>
           </div>
         ) : (
-          list.map((t) => <TournamentCard key={t.id} tournament={t} />)
+          list.map((t) => (
+            <TournamentCard key={t.id} tournament={t} myProfileId={myProfileId} />
+          ))
         )}
       </div>
     </div>

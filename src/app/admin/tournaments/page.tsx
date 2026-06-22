@@ -10,6 +10,7 @@ import { TournamentsService } from "@/services/tournamentsService";
 import { Tournament } from "@/types/tournament.types";
 import CreateTournamentCard from "@/components/tournaments/admin/CreateTournamentCard";
 import AdminTournamentCard from "@/components/tournaments/admin/AdminTournamentCard";
+import AdminWbTournamentCard from "@/components/tournaments/wb/AdminWbTournamentCard";
 
 export default function AdminTournamentsPage() {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -52,9 +53,13 @@ export default function AdminTournamentsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {tournaments.map((t) => (
-              <AdminTournamentCard key={t.id} tournament={t} onChanged={load} />
-            ))}
+            {tournaments.map((t) =>
+              t.format === "wotblitz_bracket" ? (
+                <AdminWbTournamentCard key={t.id} tournament={t} onChanged={load} />
+              ) : (
+                <AdminTournamentCard key={t.id} tournament={t} onChanged={load} />
+              )
+            )}
           </div>
         )}
       </div>

@@ -391,7 +391,9 @@ export default function DashboardPage() {
             <MemberEvents roles={profile.roles} onChanged={refresh} />
           )}
 
-          {active === "tournaments" && (hasWotBlitz || hasBidder) && <TournamentsView />}
+          {active === "tournaments" && (hasWotBlitz || hasBidder) && (
+            <TournamentsView myProfileId={profile.id} />
+          )}
 
           {active === "contact" && (
             <ComingSoonSection

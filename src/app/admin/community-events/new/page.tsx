@@ -21,6 +21,7 @@ import {
 } from "@/components/admin/communityEventMeta";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import UnsavedChangesGuard from "@/components/admin/UnsavedChangesGuard";
+import CreateWbTournamentForm from "@/components/tournaments/wb/CreateWbTournamentForm";
 
 const inputClass =
   "w-full min-w-0 rounded-xl bg-black/30 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40";
@@ -197,7 +198,95 @@ function RegistrationFieldsEditor({
   );
 }
 
-export default function CreateCommunityEventPage() {
+// The two creation options. Until the admin picks one, only the chooser shows.
+type CreateKind = "community" | "wotblitz";
+
+function KindChooser({ onPick }: { onPick: (k: CreateKind) => void }) {
+  const options: { kind: CreateKind; title: string; desc: string; icon: string }[] = [
+    {
+      kind: "community",
+      title: "Event with registration",
+      desc: "An announcement/list members register for (optionally feeding an auction). Custom fields, optional Blitz validation.",
+      icon: "📣",
+    },
+    {
+      kind: "wotblitz",
+      title: "WoT Blitz tournament",
+      desc: "A registration-based tournament: teams sign up (1v1 … 7v7+2), then groups + a knockout bracket that auto-advances by score.",
+      icon: "🏆",
+    },
+  ];
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {options.map((o) => (
+        <button
+          key={o.kind}
+          type="button"
+          onClick={() => onPick(o.kind)}
+          className="min-w-0 rounded-3xl bg-white/5 p-5 text-left ring-1 ring-white/10 transition hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50 sm:p-6"
+        >
+          <span className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-500/15 text-xl ring-1 ring-emerald-400/25">
+            {o.icon}
+          </span>
+          <h2 className="mt-3 text-base font-extrabold text-zinc-100">{o.title}</h2>
+          <p className="mt-1 text-sm text-zinc-400">{o.desc}</p>
+          <span className="mt-3 inline-block text-sm font-bold text-emerald-300">Choose →</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function CreateEventPage() {
+  const [kind, setKind] = useState<CreateKind | null>(null);
+
+  if (kind === null) {
+    return (
+      <>
+        <div className="animate-fade-up">
+          <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
+            Create event
+          </h1>
+          <p className="mt-2 text-sm text-zinc-400">Pick what you want to create.</p>
+        </div>
+        <div className="mt-6 animate-fade-up">
+          <KindChooser onPick={setKind} />
+        </div>
+      </>
+    );
+  }
+
+  if (kind === "wotblitz") {
+    return (
+      <>
+        <div className="animate-fade-up flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
+              WoT Blitz tournament
+            </h1>
+            <p className="mt-2 text-sm text-zinc-400">
+              Teams register, then play groups + a knockout bracket.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setKind(null)}
+            className="shrink-0 rounded-xl bg-white/5 px-3 py-2 text-sm font-bold text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/10"
+          >
+            ← Back
+          </button>
+        </div>
+        <div className="mt-6 animate-fade-up">
+          <CreateWbTournamentForm />
+        </div>
+      </>
+    );
+  }
+
+  return <CommunityEventForm onBack={() => setKind(null)} />;
+}
+
+function CommunityEventForm({ onBack }: { onBack: () => void }) {
   const router = useRouter();
 
   const [categoryKey, setCategoryKey] = useState("wot_blitz");
@@ -301,14 +390,23 @@ export default function CreateCommunityEventPage() {
   return (
     <>
       <UnsavedChangesGuard when={dirty} />
-      <div className="animate-fade-up">
-        <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
-          Create event
-        </h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          Post an announcement for the roles you choose. Eligible members see it on their
-          dashboard and register by filling the fields you define below.
-        </p>
+      <div className="animate-fade-up flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
+            Create event
+          </h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Post an announcement for the roles you choose. Eligible members see it on their
+            dashboard and register by filling the fields you define below.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="shrink-0 rounded-xl bg-white/5 px-3 py-2 text-sm font-bold text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/10"
+        >
+          ← Back
+        </button>
       </div>
 
       <form
