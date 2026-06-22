@@ -1,8 +1,15 @@
-// Presentational view of a community event: the #type tag, title, body, optional
-// link button, registration status and key dates. Reused by the admin "All
-// events" list and the member dashboard. Actions (participate / edit / delete)
-// are passed in as children so each surface composes its own controls.
-// Mobile-first: wraps and stays within 320px.
+// Premium presentational card for a community event, shared by the admin "All
+// events" board and the member dashboard. Layout (top to bottom):
+//   1. Category / region chips (centered).
+//   2. Title — large, centered.
+//   3. Link button (if the event has one).
+//   4. Status banner — visible when registration is closed or the event ended.
+//   5. A row of two cards: Event dates (left) and Registration window (right),
+//      with the "Participate" action (actionSlot) between them when sign-ups are
+//      open.
+//   6. Body content.
+//   7. Visible-to roles (admin) + management actions (children).
+// Mobile-first: everything stacks and stays within 320px.
 
 "use client";
 
@@ -12,18 +19,13 @@ import { roleMeta } from "@/components/admin/roleMeta";
 import {
   categoryChip,
   categoryHashtag,
+  eventPhase,
   fmtDateTime,
   registrationState,
 } from "@/components/admin/communityEventMeta";
 
-const REG_BADGE = {
-  before: { label: "Registration not open yet", cls: "bg-amber-400/15 text-amber-200 ring-amber-400/30" },
-  open: { label: "Registration open", cls: "bg-emerald-400/15 text-emerald-200 ring-emerald-400/30" },
-  closed: { label: "Registration closed", cls: "bg-zinc-400/15 text-zinc-300 ring-white/15" },
-} as const;
-
-// A ticking "now" so the registration countdown and the open/closed state stay
-// live without a page refresh. Updates once a second.
+// A ticking "now" so countdowns and the open/closed state stay live. Updates
+// once a second only while there's something time-based to watch.
 function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -34,7 +36,6 @@ function useNow(active: boolean): number {
   return now;
 }
 
-// Break a positive millisecond span into a compact "1d 2h 03m 04s" string.
 function formatRemaining(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   const d = Math.floor(total / 86400);
@@ -47,7 +48,7 @@ function formatRemaining(ms: number): string {
   return `${m}m ${pad(s)}s`;
 }
 
-function DateRow({ label, value }: { label: string; value: string }) {
+function DateLine({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 text-xs">
       <span className="text-zinc-500">{label}</span>
@@ -56,12 +57,30 @@ function DateRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// The prominent registration panel: a clear status, the key date, and a live
-// countdown (to the open time before it opens, to the close time while open).
-function RegistrationPanel({ event }: { event: CommunityEvent }) {
+// Left card: the event's own start / end dates.
+function EventDatesCard({ event }: { event: CommunityEvent }) {
+  const hasDates = event.startsAt || event.endsAt;
+  return (
+    <div className="rounded-2xl bg-black/25 p-4 ring-1 ring-white/10">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+        Event
+      </div>
+      {hasDates ? (
+        <div className="mt-2.5 space-y-1.5">
+          <DateLine label="Starts" value={fmtDateTime(event.startsAt)} />
+          <DateLine label="Ends" value={fmtDateTime(event.endsAt)} />
+        </div>
+      ) : (
+        <p className="mt-2.5 text-xs text-zinc-500">Dates to be announced.</p>
+      )}
+    </div>
+  );
+}
+
+// Right card: the registration window with a clear status + live countdown.
+function RegistrationCard({ event }: { event: CommunityEvent }) {
   const opensAt = event.registrationOpensAt;
   const closesAt = event.registrationClosesAt;
-  // Only tick while a countdown can actually change something.
   const now = useNow(Boolean(opensAt || closesAt));
   const state = registrationState(opensAt, closesAt, now);
 
@@ -80,16 +99,12 @@ function RegistrationPanel({ event }: { event: CommunityEvent }) {
       : state === "before"
         ? "text-amber-200"
         : "text-zinc-300";
-
   const headline =
     state === "open"
       ? "Registration open"
       : state === "before"
-        ? "Registration opens soon"
+        ? "Opens soon"
         : "Registration closed";
-
-  const dateLabel = state === "before" ? "Opens" : "Closes";
-  const dateValue = state === "before" ? opensAt : closesAt;
 
   return (
     <div className={`rounded-2xl p-4 ring-1 ${shell}`}>
@@ -108,60 +123,69 @@ function RegistrationPanel({ event }: { event: CommunityEvent }) {
           {headline}
         </span>
         {remaining !== null && remaining > 0 && (
-          <span className={`text-sm font-extrabold tabular-nums ${accent}`}>
-            {state === "before" ? "Opens in " : "Closes in "}
+          <span className={`text-xs font-extrabold tabular-nums ${accent}`}>
+            {state === "before" ? "in " : "closes in "}
             {formatRemaining(remaining)}
           </span>
         )}
       </div>
-      <div className="mt-2 grid grid-cols-1 gap-1.5 xs:grid-cols-2">
-        <div className="flex items-center justify-between gap-3 text-xs xs:flex-col xs:items-start xs:gap-0.5">
-          <span className="text-zinc-500">{dateLabel}</span>
-          <span className="font-semibold tabular-nums text-zinc-200">
-            {fmtDateTime(dateValue)}
-          </span>
-        </div>
-        {state !== "before" && (
-          <div className="flex items-center justify-between gap-3 text-xs xs:flex-col xs:items-start xs:gap-0.5">
-            <span className="text-zinc-500">Opened</span>
-            <span className="font-semibold tabular-nums text-zinc-300">
-              {fmtDateTime(opensAt)}
-            </span>
-          </div>
-        )}
+      <div className="mt-2.5 space-y-1.5">
+        <DateLine label="Opens" value={fmtDateTime(opensAt)} />
+        <DateLine label="Closes" value={fmtDateTime(closesAt)} />
       </div>
     </div>
   );
 }
 
+// Visible message when registration has closed or the whole event has ended.
+function StatusBanner({ event }: { event: CommunityEvent }) {
+  const now = useNow(true);
+  const phase = eventPhase(event, now);
+  const reg = registrationState(event.registrationOpensAt, event.registrationClosesAt, now);
+
+  if (phase === "past") {
+    return (
+      <div className="flex items-center justify-center gap-2 rounded-2xl bg-zinc-500/10 px-4 py-2.5 text-sm font-bold text-zinc-300 ring-1 ring-white/10">
+        <span aria-hidden>🏁</span> This event has ended.
+      </div>
+    );
+  }
+  if (reg === "closed") {
+    return (
+      <div className="flex items-center justify-center gap-2 rounded-2xl bg-amber-500/10 px-4 py-2.5 text-sm font-bold text-amber-200 ring-1 ring-amber-400/25">
+        <span aria-hidden>🔒</span> Registration is closed.
+      </div>
+    );
+  }
+  return null;
+}
+
 export default function CommunityEventView({
   event,
   showRoles = false,
+  actionSlot,
   children,
 }: {
   event: CommunityEvent;
   /** Show the "visible to" role chips (admin view). */
   showRoles?: boolean;
-  /** Action controls rendered at the bottom of the card. */
+  /** The participate action, rendered between the two date cards (member view). */
+  actionSlot?: React.ReactNode;
+  /** Management actions rendered at the bottom (admin view). */
   children?: React.ReactNode;
 }) {
-  const reg = registrationState(event.registrationOpensAt, event.registrationClosesAt);
-  const badge = REG_BADGE[reg];
+  const cols = actionSlot ? "sm:grid-cols-[1fr_auto_1fr] sm:items-stretch" : "sm:grid-cols-2";
 
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="min-w-0 space-y-5">
+      {/* Category + region chips, centered. */}
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <span
           className={`inline-flex max-w-full items-center truncate rounded-full px-2.5 py-0.5 text-xs font-bold ring-1 ${categoryChip(
             event.categoryKey
           )}`}
         >
           {categoryHashtag(event.categoryName)}
-        </span>
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ${badge.cls}`}
-        >
-          {badge.label}
         </span>
         {event.region && (
           <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-300 ring-1 ring-white/15">
@@ -170,38 +194,47 @@ export default function CommunityEventView({
         )}
       </div>
 
-      <div className="min-w-0">
-        <h3 className="text-lg font-extrabold text-zinc-100 break-words">{event.title}</h3>
-        {event.content && (
-          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-300">
-            {event.content}
-          </p>
-        )}
-      </div>
+      {/* Title — large, centered. */}
+      <h3 className="text-balance text-center text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
+        {event.title}
+      </h3>
 
+      {/* Link button (if any). */}
       {event.hasLink && event.linkUrl && (
-        <a
-          href={event.linkUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex max-w-full items-center gap-2 truncate rounded-xl bg-sky-500/15 px-4 py-2 text-sm font-bold text-sky-200 ring-1 ring-sky-400/25 transition hover:bg-sky-500/25"
-        >
-          <span aria-hidden>↗</span>
-          <span className="truncate">{event.linkLabel || "Open link"}</span>
-        </a>
-      )}
-
-      <RegistrationPanel event={event} />
-
-      {(event.startsAt || event.endsAt) && (
-        <div className="space-y-1.5 rounded-2xl bg-black/25 p-4 ring-1 ring-white/10">
-          <DateRow label="Event start" value={fmtDateTime(event.startsAt)} />
-          <DateRow label="Event end" value={fmtDateTime(event.endsAt)} />
+        <div className="flex justify-center">
+          <a
+            href={event.linkUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex max-w-full items-center gap-2 truncate rounded-xl bg-sky-500/15 px-4 py-2 text-sm font-bold text-sky-200 ring-1 ring-sky-400/25 transition hover:bg-sky-500/25"
+          >
+            <span aria-hidden>↗</span>
+            <span className="truncate">{event.linkLabel || "Open link"}</span>
+          </a>
         </div>
       )}
 
+      <StatusBanner event={event} />
+
+      {/* Event dates · Participate · Registration window. */}
+      <div className={`grid gap-3 ${cols}`}>
+        <EventDatesCard event={event} />
+        {actionSlot && (
+          <div className="flex items-center justify-center sm:px-1">{actionSlot}</div>
+        )}
+        <RegistrationCard event={event} />
+      </div>
+
+      {/* Body content. */}
+      {event.content && (
+        <p className="whitespace-pre-wrap break-words text-center text-sm text-zinc-300">
+          {event.content}
+        </p>
+      )}
+
+      {/* Visible-to roles (admin). */}
       {showRoles && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
           <span className="text-[11px] uppercase tracking-wide text-zinc-500">Visible to:</span>
           {event.visibleRoles.length === 0 ? (
             <span className="text-xs text-zinc-500">no roles</span>

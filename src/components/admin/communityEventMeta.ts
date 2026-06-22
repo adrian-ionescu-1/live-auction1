@@ -47,6 +47,41 @@ export function registrationState(
   return "open";
 }
 
+export type EventPhase = "upcoming" | "current" | "past";
+
+/**
+ * Lifecycle phase of a community event for the 3-tab board:
+ *   * upcoming — not started yet (future start, or registration hasn't opened).
+ *   * current  — happening now / open.
+ *   * past     — ended (end date passed, or — for undated events — registration closed).
+ * Dated events are driven by their start/end dates; undated announcements fall
+ * back to the registration window.
+ */
+export function eventPhase(
+  event: {
+    startsAt: string | null;
+    endsAt: string | null;
+    registrationOpensAt: string | null;
+    registrationClosesAt: string | null;
+  },
+  now: number = Date.now()
+): EventPhase {
+  const ends = event.endsAt ? new Date(event.endsAt).getTime() : null;
+  const starts = event.startsAt ? new Date(event.startsAt).getTime() : null;
+
+  if (ends !== null) {
+    if (now > ends) return "past";
+    if (starts !== null && now < starts) return "upcoming";
+    return "current";
+  }
+
+  // No end date — let the registration window decide.
+  const reg = registrationState(event.registrationOpensAt, event.registrationClosesAt, now);
+  if (reg === "before") return "upcoming";
+  if (reg === "closed") return "past";
+  return "current";
+}
+
 export function fmtDateTime(value: string | null): string {
   if (!value) return "—";
   return new Date(value).toLocaleString(undefined, {

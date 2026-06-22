@@ -90,31 +90,34 @@ export default function MemberEvents({
               key={ev.id}
               className="min-w-0 rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6"
             >
-              <CommunityEventView event={ev}>
-                <div className="flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
-                  {isRegistered && (
+              <CommunityEventView
+                event={ev}
+                actionSlot={
+                  reg === "open" ? (
+                    <div className="flex flex-col items-center gap-2">
+                      {isRegistered && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25">
+                          ✓ Registered
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(null);
+                          setActive(ev);
+                        }}
+                        className="rounded-2xl bg-emerald-500/20 px-5 py-2.5 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98]"
+                      >
+                        {isRegistered ? "Update" : "Participate"}
+                      </button>
+                    </div>
+                  ) : isRegistered ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25">
                       ✓ Registered
                     </span>
-                  )}
-                  {reg === "open" ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError(null);
-                        setActive(ev);
-                      }}
-                      className="rounded-2xl bg-emerald-500/20 px-5 py-2.5 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98]"
-                    >
-                      {isRegistered ? "Update my registration" : "Participate"}
-                    </button>
-                  ) : (
-                    <span className="text-xs font-semibold text-zinc-500">
-                      {reg === "before" ? "Registration not open yet" : "Registration closed"}
-                    </span>
-                  )}
-                </div>
-              </CommunityEventView>
+                  ) : undefined
+                }
+              />
             </div>
           );
         })}
