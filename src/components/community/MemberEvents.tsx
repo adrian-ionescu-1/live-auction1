@@ -10,6 +10,7 @@ import { CommunityEventsService } from "@/services/communityEventsService";
 import { CommunityEvent, MyRegistration } from "@/types/community-event.types";
 import { registrationState } from "@/components/admin/communityEventMeta";
 import CommunityEventView from "@/components/community/CommunityEventView";
+import EventsBoard from "@/components/community/EventsBoard";
 import RegistrationFormDialog from "@/components/community/RegistrationFormDialog";
 
 export default function MemberEvents({
@@ -81,15 +82,15 @@ export default function MemberEvents({
         Announcements open to your role. Register to take part.
       </p>
 
-      <div className="mt-4 space-y-4">
-        {events.map((ev) => {
-          const reg = registrationState(ev.registrationOpensAt, ev.registrationClosesAt);
-          const isRegistered = registered.has(ev.id);
-          return (
-            <div
-              key={ev.id}
-              className="min-w-0 rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6"
-            >
+      <div className="mt-4">
+        <EventsBoard
+          events={events}
+          showBadges
+          emptyHint="Events open to your role show up here as they're announced."
+          renderEvent={(ev) => {
+            const reg = registrationState(ev.registrationOpensAt, ev.registrationClosesAt);
+            const isRegistered = registered.has(ev.id);
+            return (
               <CommunityEventView
                 event={ev}
                 actionSlot={
@@ -118,9 +119,9 @@ export default function MemberEvents({
                   ) : undefined
                 }
               />
-            </div>
-          );
-        })}
+            );
+          }}
+        />
       </div>
 
       <RegistrationFormDialog

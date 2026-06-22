@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CommunityEventsService } from "@/services/communityEventsService";
 import { CommunityEvent } from "@/types/community-event.types";
 import CommunityEventView from "@/components/community/CommunityEventView";
+import EventsBoard from "@/components/community/EventsBoard";
 import EditCommunityEventDialog from "@/components/community/EditCommunityEventDialog";
 import DatePromptDialog from "@/components/community/DatePromptDialog";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -148,7 +149,7 @@ export default function CommunityEventsListPage() {
 
       {error && <p className="mt-4 text-sm font-semibold text-red-200">{error}</p>}
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-6">
         {loading ? (
           <div className="h-40 animate-pulse rounded-3xl bg-white/5 ring-1 ring-white/10" />
         ) : events.length === 0 ? (
@@ -159,18 +160,17 @@ export default function CommunityEventsListPage() {
             </p>
           </div>
         ) : (
-          events.map((ev) => {
-            const regState = registrationState(
-              ev.registrationOpensAt,
-              ev.registrationClosesAt
-            );
-            const regOpen = regState === "open";
-            const regClosed = regState === "closed";
-            return (
-            <div
-              key={ev.id}
-              className="min-w-0 animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6"
-            >
+          <EventsBoard
+            events={events}
+            emptyHint="Create an event to let members register."
+            renderEvent={(ev) => {
+              const regState = registrationState(
+                ev.registrationOpensAt,
+                ev.registrationClosesAt
+              );
+              const regOpen = regState === "open";
+              const regClosed = regState === "closed";
+              return (
               <CommunityEventView event={ev} showRoles>
                 <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
                   <button
@@ -232,9 +232,9 @@ export default function CommunityEventsListPage() {
                   </button>
                 </div>
               </CommunityEventView>
-            </div>
-            );
-          })
+              );
+            }}
+          />
         )}
       </div>
 
