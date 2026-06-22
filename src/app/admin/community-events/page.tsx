@@ -9,11 +9,12 @@ import { useCallback, useEffect, useState } from "react";
 import { CommunityEventsService } from "@/services/communityEventsService";
 import { CommunityEvent } from "@/types/community-event.types";
 import CommunityEventView from "@/components/community/CommunityEventView";
+import EventsBoard from "@/components/community/EventsBoard";
 import EditCommunityEventDialog from "@/components/community/EditCommunityEventDialog";
 import DatePromptDialog from "@/components/community/DatePromptDialog";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ConfirmByNameDialog from "@/components/admin/ConfirmByNameDialog";
-import { localInputValue } from "@/components/admin/communityEventMeta";
+import { localInputValue, registrationState } from "@/components/admin/communityEventMeta";
 
 export default function CommunityEventsListPage() {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
@@ -24,6 +25,7 @@ export default function CommunityEventsListPage() {
   const [editing, setEditing] = useState<CommunityEvent | null>(null);
   const [extending, setExtending] = useState<CommunityEvent | null>(null);
   const [reopening, setReopening] = useState<CommunityEvent | null>(null);
+  const [extendingReg, setExtendingReg] = useState<CommunityEvent | null>(null);
   const [closing, setClosing] = useState<CommunityEvent | null>(null);
   const [deleting, setDeleting] = useState<CommunityEvent | null>(null);
 
@@ -80,6 +82,21 @@ export default function CommunityEventsListPage() {
     }
   };
 
+  // Extend = push the close time further out while registration is still open.
+  // Same server effect as reopen (set a new registration_closes_at).
+  const handleExtendReg = async (iso: string) => {
+    if (!extendingReg) return;
+    setBusy(true);
+    const res = await CommunityEventsService.reopenRegistration(extendingReg.id, iso);
+    setBusy(false);
+    if (res.success) {
+      setExtendingReg(null);
+      await load();
+    } else {
+      setError(res.error ?? "Could not extend registration");
+    }
+  };
+
   const handleClose = async () => {
     if (!closing) return;
     setBusy(true);
@@ -132,7 +149,7 @@ export default function CommunityEventsListPage() {
 
       {error && <p className="mt-4 text-sm font-semibold text-red-200">{error}</p>}
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-6">
         {loading ? (
           <div className="h-40 animate-pulse rounded-3xl bg-white/5 ring-1 ring-white/10" />
         ) : events.length === 0 ? (
@@ -143,11 +160,17 @@ export default function CommunityEventsListPage() {
             </p>
           </div>
         ) : (
-          events.map((ev) => (
-            <div
-              key={ev.id}
-              className="min-w-0 animate-fade-up rounded-3xl bg-white/5 p-5 ring-1 ring-white/10 sm:p-6"
-            >
+          <EventsBoard
+            events={events}
+            emptyHint="Create an event to let members register."
+            renderEvent={(ev) => {
+              const regState = registrationState(
+                ev.registrationOpensAt,
+                ev.registrationClosesAt
+              );
+              const regOpen = regState === "open";
+              const regClosed = regState === "closed";
+              return (
               <CommunityEventView event={ev} showRoles>
                 <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
                   <button
@@ -164,16 +187,32 @@ export default function CommunityEventsListPage() {
                   >
                     Extend event
                   </button>
+                  {/* Reopen: only when registration isn't already open. */}
                   <button
                     type="button"
                     onClick={() => setReopening(ev)}
+                    disabled={regOpen}
+                    title={regOpen ? "Registration is already open" : undefined}
                     className={`${btn} bg-emerald-500/15 text-emerald-200 ring-emerald-400/25 hover:bg-emerald-500/25`}
                   >
                     Reopen registration
                   </button>
+                  {/* Extend: push the close time out while registration is open. */}
+                  <button
+                    type="button"
+                    onClick={() => setExtendingReg(ev)}
+                    disabled={!regOpen}
+                    title={!regOpen ? "Registration isn't open" : undefined}
+                    className={`${btn} bg-indigo-500/15 text-indigo-200 ring-indigo-400/25 hover:bg-indigo-500/25`}
+                  >
+                    Extend registration
+                  </button>
+                  {/* Close: only when registration isn't already closed. */}
                   <button
                     type="button"
                     onClick={() => setClosing(ev)}
+                    disabled={regClosed}
+                    title={regClosed ? "Registration is already closed" : undefined}
                     className={`${btn} bg-amber-500/15 text-amber-200 ring-amber-400/25 hover:bg-amber-500/25`}
                   >
                     Close registration
@@ -193,8 +232,9 @@ export default function CommunityEventsListPage() {
                   </button>
                 </div>
               </CommunityEventView>
-            </div>
-          ))
+              );
+            }}
+          />
         )}
       </div>
 
@@ -246,6 +286,28 @@ export default function CommunityEventsListPage() {
         busy={busy}
         onConfirm={handleReopen}
         onCancel={() => setReopening(null)}
+      />
+
+      <DatePromptDialog
+        isOpen={extendingReg !== null}
+        title="Extend registration"
+        description={
+          <>
+            Push the registration close time for{" "}
+            <span className="font-semibold text-zinc-200">{extendingReg?.title}</span> further out,
+            so members have more time to sign up.
+          </>
+        }
+        label="Registration closes at"
+        initial={
+          extendingReg?.registrationClosesAt
+            ? localInputValue(new Date(extendingReg.registrationClosesAt))
+            : undefined
+        }
+        confirmLabel="Extend"
+        busy={busy}
+        onConfirm={handleExtendReg}
+        onCancel={() => setExtendingReg(null)}
       />
 
       <ConfirmDialog

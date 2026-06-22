@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import { EventsService } from '@/services/eventsService';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import ReopenAuctionDialog from './ReopenAuctionDialog';
 
 const TIME_EXTENSIONS = [5, 10, 15]; // seconds
 
@@ -46,11 +48,12 @@ export default function AdminControls() {
     startAuction,
     pauseAuction,
     resumeAuction,
-    reset,
     extendTime,
   } = useAuctionStore();
 
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showReopen, setShowReopen] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
   const [showEarlyStartConfirm, setShowEarlyStartConfirm] = useState(false);
   const [startingEarly, setStartingEarly] = useState(false);
@@ -95,12 +98,18 @@ export default function AdminControls() {
   const canExtend = status === 'active' && !currentPlayerSold;
   const meta = STATUS_META[status] ?? STATUS_META.idle;
 
-  const handleResetClick = () => setShowResetConfirm(true);
-  const handleResetConfirm = () => {
-    reset();
-    setShowResetConfirm(false);
+  const handleReopen = async (opensAt: string | null) => {
+    setReopening(true);
+    setReopenError(null);
+    const res = await EventsService.reopenAuction(opensAt);
+    setReopening(false);
+    if (res.success) {
+      setShowReopen(false);
+      void useAuctionStore.getState().reconcile();
+    } else {
+      setReopenError(res.error ?? 'Could not reopen the auction');
+    }
   };
-  const handleResetCancel = () => setShowResetConfirm(false);
 
   const handleExtend = async (seconds: number) => {
     setExtendError(null);
@@ -223,32 +232,46 @@ export default function AdminControls() {
                 🏁 End &amp; distribute remaining
               </button>
             )}
-            {/* Once the auction has finished, resetting is handled from the
-                Events page (Reopen, gated by typed-name + final confirm), so we
-                don't expose a reset button here that could wipe state by accident. */}
-            {status === 'finished' ? (
-              <p className="rounded-2xl bg-white/5 py-3 px-4 text-center text-xs text-zinc-400 ring-1 ring-white/10">
-                Auction finished. To run it again, reopen the event from{' '}
-                <span className="font-semibold text-zinc-200">Events</span>.
-              </p>
-            ) : (
-              <button
-                onClick={handleResetClick}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500/10 py-3 px-4 text-sm font-bold text-red-200 ring-1 ring-red-400/20 transition hover:bg-red-500/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
-              >
-                🔄 Reset auction
-              </button>
+            {status === 'finished' && (
+              <div className="rounded-2xl bg-emerald-500/10 p-4 text-center ring-1 ring-emerald-400/25">
+                <div className="text-2xl">🏁</div>
+                <p className="mt-1 text-sm font-extrabold text-emerald-100">
+                  Auction ended successfully
+                </p>
+                <p className="mt-1 text-xs text-emerald-200/80">
+                  Nice work — every player has been settled. You can head back to your dashboard.
+                </p>
+                <Link
+                  href="/admin"
+                  className="mt-3 inline-flex items-center justify-center rounded-2xl bg-emerald-500/20 px-5 py-2.5 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 active:scale-[0.98]"
+                >
+                  ← Back to dashboard
+                </Link>
+              </div>
             )}
+
+            {/* Reopen / restart — wipes every bid + result and runs it again.
+                Gated by a typed-name + consent dialog, with now/scheduled. */}
+            <button
+              onClick={() => {
+                setReopenError(null);
+                setShowReopen(true);
+              }}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500/10 py-3 px-4 text-sm font-bold text-red-200 ring-1 ring-red-400/20 transition hover:bg-red-500/20 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
+            >
+              🔄 {status === 'finished' ? 'Reopen auction' : 'Reopen / reset auction'}
+            </button>
           </div>
         </div>
       </div>
 
-      <ConfirmDialog
-        isOpen={showResetConfirm}
-        title="Reset Auction"
-        message="Are you sure you want to restart the auction and accept the terms & conditions?"
-        onConfirm={handleResetConfirm}
-        onCancel={handleResetCancel}
+      <ReopenAuctionDialog
+        isOpen={showReopen}
+        eventName={liveEvent?.name ?? 'this auction'}
+        busy={reopening}
+        error={reopenError}
+        onConfirm={handleReopen}
+        onCancel={() => setShowReopen(false)}
       />
 
       <ConfirmDialog
