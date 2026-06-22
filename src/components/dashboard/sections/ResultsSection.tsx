@@ -29,9 +29,13 @@ export default function ResultsSection({ results }: { results: MyEventResults[] 
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-extrabold text-zinc-100">{ev.eventName}</span>
               <span className="flex items-center gap-2">
-                {ev.status === "finished" && (
+                {ev.status === "finished" ? (
                   <span className="rounded-full bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-bold text-cyan-200 ring-1 ring-cyan-400/25">
-                    Closed
+                    Final
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-bold text-emerald-200 ring-1 ring-emerald-400/25">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300" /> Live
                   </span>
                 )}
                 <span className="text-xs text-zinc-400">
