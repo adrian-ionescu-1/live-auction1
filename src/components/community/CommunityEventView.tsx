@@ -163,12 +163,15 @@ function StatusBanner({ event }: { event: CommunityEvent }) {
 export default function CommunityEventView({
   event,
   showRoles = false,
+  hideTitle = false,
   actionSlot,
   children,
 }: {
   event: CommunityEvent;
   /** Show the "visible to" role chips (admin view). */
   showRoles?: boolean;
+  /** Hide the big title (when a collapsible board header already shows it). */
+  hideTitle?: boolean;
   /** The participate action, rendered between the two date cards (member view). */
   actionSlot?: React.ReactNode;
   /** Management actions rendered at the bottom (admin view). */
@@ -195,9 +198,11 @@ export default function CommunityEventView({
       </div>
 
       {/* Title — large, centered. */}
-      <h3 className="text-balance text-center text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
-        {event.title}
-      </h3>
+      {!hideTitle && (
+        <h3 className="text-balance text-center text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl">
+          {event.title}
+        </h3>
+      )}
 
       {/* Link button (if any). */}
       {event.hasLink && event.linkUrl && (
@@ -225,9 +230,9 @@ export default function CommunityEventView({
         <RegistrationCard event={event} />
       </div>
 
-      {/* Body content. */}
+      {/* Body content — left-aligned for readability. */}
       {event.content && (
-        <p className="whitespace-pre-wrap break-words text-center text-sm text-zinc-300">
+        <p className="whitespace-pre-wrap break-words text-left text-sm text-zinc-300">
           {event.content}
         </p>
       )}

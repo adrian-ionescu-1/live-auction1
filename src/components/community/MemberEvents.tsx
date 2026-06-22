@@ -93,6 +93,7 @@ export default function MemberEvents({
             return (
               <CommunityEventView
                 event={ev}
+                hideTitle
                 actionSlot={
                   reg === "open" ? (
                     <div className="flex flex-col items-center gap-2">

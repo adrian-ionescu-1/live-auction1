@@ -90,6 +90,9 @@ function RegistrationsCard({
   myRegs: Map<string, MyRegistration>;
   onWithdraw: (event: CommunityEvent) => void;
 }) {
+  // Personalized cards are collapsed by default so the list stays compact.
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
+
   return (
     <div className="rounded-3xl bg-white/5 p-6 ring-1 ring-white/10">
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">My registrations</div>
@@ -124,6 +127,16 @@ function RegistrationsCard({
                   >
                     {label}
                   </span>
+                  {reg && (
+                    <button
+                      type="button"
+                      onClick={() => setOpenCardId(openCardId === ev.id ? null : ev.id)}
+                      aria-expanded={openCardId === ev.id}
+                      className="shrink-0 rounded-lg bg-white/5 px-2.5 py-1 text-xs font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
+                    >
+                      {openCardId === ev.id ? "Hide card" : "View my card"}
+                    </button>
+                  )}
                   {state === "open" && (
                     <button
                       type="button"
@@ -134,7 +147,7 @@ function RegistrationsCard({
                     </button>
                   )}
                 </div>
-                {reg && <MyCard reg={reg} />}
+                {reg && openCardId === ev.id && <MyCard reg={reg} />}
               </li>
             );
           })}

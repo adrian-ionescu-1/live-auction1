@@ -171,7 +171,7 @@ export default function CommunityEventsListPage() {
               const regOpen = regState === "open";
               const regClosed = regState === "closed";
               return (
-              <CommunityEventView event={ev} showRoles>
+              <CommunityEventView event={ev} showRoles hideTitle>
                 <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
                   <button
                     type="button"
