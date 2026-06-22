@@ -51,6 +51,7 @@ function SiteFooter() {
                 { href: "/rules", label: "Rules" },
                 { href: "/faq", label: "FAQ" },
                 { href: "/streamers", label: "Streamers" },
+                { href: "/contact", label: "Contact" },
               ].map((l) => (
                 <li key={l.href}>
                   <Link
