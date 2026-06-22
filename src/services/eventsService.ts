@@ -293,4 +293,22 @@ export class EventsService {
     }
     return { success: true, error: null };
   }
+
+  /**
+   * Reopen / restart the live auction: like reset, but also clears the event's
+   * recorded results and brings it back to live. `opensAt` null = open now, a
+   * future ISO timestamp = scheduled reopen (bidders see a countdown).
+   */
+  static async reopenAuction(
+    opensAt: string | null
+  ): Promise<{ success: boolean; error: string | null }> {
+    const { data, error } = await supabase.rpc("admin_reopen_auction", {
+      p_opens_at: opensAt,
+    });
+    if (error) return { success: false, error: error.message };
+    if (data && typeof data === "object") {
+      return { success: data.success === true, error: data.error ?? null };
+    }
+    return { success: true, error: null };
+  }
 }
