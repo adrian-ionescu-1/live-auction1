@@ -23,6 +23,7 @@ import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
 import ExcludedScreen from "@/app/_components/ExcludedScreen";
 import Logo from "@/app/_components/Logo";
 import MemberEvents from "@/components/community/MemberEvents";
+import TournamentsView from "@/components/tournaments/TournamentsView";
 import MemberNav, { MemberNavItem } from "@/components/dashboard/MemberNav";
 import WelcomeSection from "@/components/dashboard/sections/WelcomeSection";
 import ProfileSection, { DashboardNotice } from "@/components/dashboard/sections/ProfileSection";
@@ -390,14 +391,7 @@ export default function DashboardPage() {
             <MemberEvents roles={profile.roles} onChanged={refresh} />
           )}
 
-          {active === "tournaments" && (hasWotBlitz || hasBidder) && (
-            <ComingSoonSection
-              icon="🏆"
-              title="Tournaments"
-              description="Brackets, fixtures and live tournament tracking are on the way. Register for events in the Events tab in the meantime."
-              bullets={["Seeded brackets", "Match schedules", "Live standings", "Prize tracking"]}
-            />
-          )}
+          {active === "tournaments" && (hasWotBlitz || hasBidder) && <TournamentsView />}
 
           {active === "contact" && (
             <ComingSoonSection

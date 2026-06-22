@@ -34,7 +34,7 @@ const NAV: NavItem[] = [
     ],
   },
   { href: "/admin/room", label: "Auction room" },
-  { href: "/admin/matches", label: "Matches" },
+  { href: "/admin/tournaments", label: "Tournaments" },
 ];
 
 function isActive(pathname: string, href: string): boolean {

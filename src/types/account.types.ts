@@ -73,4 +73,6 @@ export interface Member {
   /** The full set of roles the member holds (lowercased). */
   roles: string[];
   banned: boolean;
+  /** Default national tag (ISO alpha-2) used to pre-fill tournament teams. */
+  defaultCountry: string | null;
 }

@@ -341,9 +341,9 @@ export default function AdminOverviewPage() {
             icon: "users",
           },
           {
-            href: "/admin/matches",
-            title: "Matches",
-            desc: "Tournament fixtures between the squads. Coming soon.",
+            href: "/admin/tournaments",
+            title: "Tournaments",
+            desc: "FIFA-style competitions: teams, standings, fixtures and scores.",
             icon: "swords",
           },
           {
