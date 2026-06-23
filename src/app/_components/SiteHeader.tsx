@@ -37,7 +37,7 @@ export default function SiteHeader({
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/60 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/40">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
+      <div className="relative z-40 mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
         {/* Logo */}
         <Link
           href="/"
@@ -114,9 +114,21 @@ export default function SiteHeader({
         </div>
       </div>
 
+      {/* Backdrop: tapping outside the menu closes it (mobile only). Sits below
+          the header (z-30) so the burger button stays tappable to toggle. */}
+      {open && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          tabIndex={-1}
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-20 cursor-default md:hidden"
+        />
+      )}
+
       {/* Mobile menu panel */}
       {open && (
-        <nav className="border-t border-white/10 bg-zinc-950/80 backdrop-blur md:hidden">
+        <nav className="relative z-30 border-t border-white/10 bg-zinc-950/80 backdrop-blur md:hidden">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-3 sm:px-6">
             {NAV.map((item) => (
               <Link
