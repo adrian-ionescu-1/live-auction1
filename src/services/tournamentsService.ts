@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { ADMIN_KEY_STORAGE } from "@/services/authService";
 import {
+  MyTournamentTeam,
   Tournament,
   TournamentMatch,
   TournamentRound,
@@ -50,6 +51,9 @@ function mapTournament(row: Record<string, unknown>): Tournament {
     stage: (row.stage as Tournament["stage"]) ?? null,
     groupCount: row.group_count != null ? Number(row.group_count) : null,
     advancePerGroup: row.advance_per_group != null ? Number(row.advance_per_group) : null,
+    visibleRoles: Array.isArray(row.visible_roles)
+      ? (row.visible_roles as unknown[]).map((r) => String(r).toLowerCase())
+      : [],
   };
 }
 
@@ -453,6 +457,7 @@ export class TournamentsService {
     startsAt: string | null;
     registrationOpensAt: string | null;
     registrationClosesAt: string | null;
+    visibleRoles: string[];
   }): Promise<{ success: boolean; tournamentId: string | null; error: string | null }> {
     const { data, error } = await supabase.rpc("admin_create_wb_tournament", {
       p_name: input.name,
@@ -462,6 +467,7 @@ export class TournamentsService {
       p_starts_at: input.startsAt,
       p_registration_opens_at: input.registrationOpensAt,
       p_registration_closes_at: input.registrationClosesAt,
+      p_visible_roles: input.visibleRoles,
       p_admin_key: adminKey(),
     });
     if (error) return { success: false, tournamentId: null, error: error.message };
@@ -505,15 +511,61 @@ export class TournamentsService {
     return unwrap(data, error);
   }
 
-  /** Member (captain): close the team (no more edits). */
-  static async lockOwnTeam(teamId: string): Promise<RpcResult> {
-    const { data, error } = await supabase.rpc("lock_wb_team", { p_team_id: teamId });
-    return unwrap(data, error);
-  }
-
   /** Member (captain): withdraw the team while registration is open. */
   static async withdrawOwnTeam(teamId: string): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("withdraw_wb_team", { p_team_id: teamId });
+    return unwrap(data, error);
+  }
+
+  /** Admin: edit a WoT Blitz tournament (info, region, roles, dates). */
+  static async adminUpdateWbTournament(input: {
+    tournamentId: string;
+    name: string;
+    description: string | null;
+    region: string | null;
+    visibleRoles: string[];
+    startsAt: string | null;
+    registrationOpensAt: string | null;
+    registrationClosesAt: string | null;
+  }): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_update_tournament", {
+      p_tournament_id: input.tournamentId,
+      p_name: input.name,
+      p_description: input.description,
+      p_region: input.region,
+      p_visible_roles: input.visibleRoles,
+      p_starts_at: input.startsAt,
+      p_registration_opens_at: input.registrationOpensAt,
+      p_registration_closes_at: input.registrationClosesAt,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
+  /** Admin: set the registration close time (close now / extend / reopen). */
+  static async adminSetWbRegClose(tournamentId: string, closesAt: string): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_set_reg_close", {
+      p_tournament_id: tournamentId,
+      p_closes_at: closesAt,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
+  /** Admin: add a team manually (no captain), with an optional roster. */
+  static async adminAddWbTeam(
+    tournamentId: string,
+    name: string,
+    symbol: string | null,
+    members: WbMemberInput[]
+  ): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_add_team", {
+      p_tournament_id: tournamentId,
+      p_name: name,
+      p_symbol: symbol,
+      p_members: members,
+      p_admin_key: adminKey(),
+    });
     return unwrap(data, error);
   }
 
@@ -530,6 +582,40 @@ export class TournamentsService {
       p_admin_key: adminKey(),
     });
     return unwrap(data, error);
+  }
+
+  /** Admin: edit a team's full roster (name, symbol and players). */
+  static async adminSaveWbTeam(
+    teamId: string,
+    name: string,
+    symbol: string | null,
+    members: WbMemberInput[]
+  ): Promise<RpcResult> {
+    const { data, error } = await supabase.rpc("admin_wb_save_team", {
+      p_team_id: teamId,
+      p_name: name,
+      p_symbol: symbol,
+      p_members: members,
+      p_admin_key: adminKey(),
+    });
+    return unwrap(data, error);
+  }
+
+  /** The teams the signed-in member captains, with their tournament context. */
+  static async listMyTeams(profileId: string): Promise<MyTournamentTeam[]> {
+    const { data, error } = await supabase
+      .from("tournament_teams")
+      .select("*, tournament_team_members(*), tournaments!inner(*)")
+      .eq("captain_profile_id", profileId);
+    if (error) {
+      console.error("Error loading my teams:", error);
+      return [];
+    }
+    return (data ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      const t = (r.tournaments ?? {}) as Record<string, unknown>;
+      return { team: mapTeam(r), tournament: mapTournament(t) };
+    });
   }
 
   /** Admin: draw teams into groups (seeded) + create round-robin matches. */

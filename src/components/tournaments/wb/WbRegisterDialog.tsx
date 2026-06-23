@@ -77,8 +77,11 @@ export default function WbRegisterDialog({
   const [starterSlots, setStarterSlots] = useState<Slot[]>([]);
   const [reserveSlots, setReserveSlots] = useState<Slot[]>([]);
   const [touched, setTouched] = useState(false);
+  // A "Register this team?" yes/no step shown before a NEW registration is sent.
+  const [confirming, setConfirming] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const isEdit = !!initialTeam;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -103,6 +106,7 @@ export default function WbRegisterDialog({
       })
     );
     setTouched(false);
+    setConfirming(false);
   }, [isOpen, initialTeam, starters, reserves]);
 
   useEffect(() => {
@@ -132,6 +136,12 @@ export default function WbRegisterDialog({
   const submit = () => {
     setTouched(true);
     if (!canSubmit) return;
+    // New registrations get an explicit yes/no confirmation first; edits save
+    // straight away (the team stays registered).
+    if (!isEdit && !confirming) {
+      setConfirming(true);
+      return;
+    }
     const members: WbMemberInput[] = [];
     let slot = 0;
     for (const s of starterSlots) {
@@ -247,14 +257,21 @@ export default function WbRegisterDialog({
 
           {error && <p className="mt-3 text-sm font-semibold text-red-200">{error}</p>}
 
+          {confirming && !isEdit && (
+            <p className="mt-4 rounded-2xl bg-emerald-500/10 p-3 text-sm text-emerald-100 ring-1 ring-emerald-400/25">
+              Register this team? You can edit it while sign-ups are open; once they close it&apos;s
+              locked in.
+            </p>
+          )}
+
           <div className="mt-5 flex gap-3">
             <button
               type="button"
-              onClick={onCancel}
+              onClick={confirming ? () => setConfirming(false) : onCancel}
               disabled={busy}
               className="flex-1 rounded-2xl bg-white/5 px-4 py-3 text-sm font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10 disabled:opacity-60"
             >
-              Cancel
+              {confirming ? "Back" : "Cancel"}
             </button>
             <button
               type="button"
@@ -262,7 +279,7 @@ export default function WbRegisterDialog({
               disabled={busy}
               className="flex-1 rounded-2xl bg-emerald-500/20 px-4 py-3 text-sm font-bold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {busy ? "Saving…" : initialTeam ? "Save team" : "Register team"}
+              {busy ? "Saving…" : isEdit ? "Save team" : confirming ? "Yes, register" : "Register team"}
             </button>
           </div>
         </div>

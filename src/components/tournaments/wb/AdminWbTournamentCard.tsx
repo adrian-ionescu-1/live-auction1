@@ -6,15 +6,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TournamentsService, TournamentDetail } from "@/services/tournamentsService";
+import { TournamentsService, TournamentDetail, WbMemberInput } from "@/services/tournamentsService";
 import { Tournament } from "@/types/tournament.types";
 import { teamFormat } from "@/lib/teamFormats";
 import { fmtDateTime } from "@/components/admin/communityEventMeta";
+import { roleMeta } from "@/components/admin/roleMeta";
 import TeamsList, { WbTeamName } from "@/components/tournaments/wb/TeamsList";
 import AdminTeamControls from "@/components/tournaments/wb/AdminTeamControls";
 import GroupsView from "@/components/tournaments/wb/GroupsView";
 import BracketView from "@/components/tournaments/wb/BracketView";
 import ConfirmByNameDialog from "@/components/admin/ConfirmByNameDialog";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import DatePromptDialog from "@/components/community/DatePromptDialog";
+import EditWbTournamentDialog, { EditWbPayload } from "@/components/tournaments/wb/EditWbTournamentDialog";
+import WbRegisterDialog from "@/components/tournaments/wb/WbRegisterDialog";
+import { localInputValue } from "@/components/admin/communityEventMeta";
 
 function StageBadge({ t }: { t: Tournament }) {
   const map: Record<string, { label: string; cls: string }> = {
@@ -57,6 +63,15 @@ export default function AdminWbTournamentCard({
   const [confirmBracket, setConfirmBracket] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Registration management.
+  const [editOpen, setEditOpen] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [confirmCloseReg, setConfirmCloseReg] = useState(false);
+  const [extendRegOpen, setExtendRegOpen] = useState(false);
+  const [addTeamOpen, setAddTeamOpen] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const loadDetail = useCallback(async () => {
     setLoading(true);
@@ -139,6 +154,64 @@ export default function AdminWbTournamentCard({
     await onChanged();
   };
 
+  const doUpdate = async (payload: EditWbPayload) => {
+    setBusy(true);
+    setEditError(null);
+    const res = await TournamentsService.adminUpdateWbTournament({
+      tournamentId: tournament.id,
+      ...payload,
+    });
+    setBusy(false);
+    if (res.success) {
+      setEditOpen(false);
+      setNotice("Tournament updated.");
+      await refresh();
+    } else setEditError(res.error ?? "Could not save changes");
+  };
+
+  const doCloseReg = async () => {
+    setBusy(true);
+    const res = await TournamentsService.adminSetWbRegClose(tournament.id, new Date().toISOString());
+    setBusy(false);
+    setConfirmCloseReg(false);
+    if (res.success) {
+      setNotice("Registration closed.");
+      await onChanged();
+    } else setNotice(res.error ?? "Could not close registration");
+  };
+
+  const doExtendReg = async (iso: string) => {
+    setBusy(true);
+    const res = await TournamentsService.adminSetWbRegClose(tournament.id, iso);
+    setBusy(false);
+    setExtendRegOpen(false);
+    if (res.success) {
+      setNotice("Registration window updated.");
+      await onChanged();
+    } else setNotice(res.error ?? "Could not update registration");
+  };
+
+  const doAddTeam = async (result: {
+    name: string;
+    symbol: string | null;
+    members: WbMemberInput[];
+  }) => {
+    setAddBusy(true);
+    setAddError(null);
+    const res = await TournamentsService.adminAddWbTeam(
+      tournament.id,
+      result.name,
+      result.symbol,
+      result.members
+    );
+    setAddBusy(false);
+    if (res.success) {
+      setAddTeamOpen(false);
+      setNotice("Team added.");
+      await refresh();
+    } else setAddError(res.error ?? "Could not add team");
+  };
+
   return (
     <div className="min-w-0 animate-fade-up rounded-3xl bg-white/5 ring-1 ring-white/10">
       <button
@@ -169,6 +242,9 @@ export default function AdminWbTournamentCard({
               {tournament.registrationClosesAt
                 ? ` · reg. closes ${fmtDateTime(tournament.registrationClosesAt)}`
                 : ""}
+              {tournament.visibleRoles.length > 0
+                ? ` · seen by ${tournament.visibleRoles.map((r) => roleMeta(r).label).join(", ")}`
+                : ""}
             </span>
             {tournament.status === "draft" && (
               <button
@@ -190,6 +266,38 @@ export default function AdminWbTournamentCard({
                 Reopen
               </button>
             )}
+            {/* Registration quick actions (published + still in the sign-up stage). */}
+            {tournament.status === "published" && stage === "registration" && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setExtendRegOpen(true)}
+                  className="rounded-xl bg-indigo-500/15 px-3 py-1.5 text-xs font-bold text-indigo-200 ring-1 ring-indigo-400/25 transition hover:bg-indigo-500/25 disabled:opacity-50"
+                >
+                  Extend registration
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmCloseReg(true)}
+                  className="rounded-xl bg-amber-500/15 px-3 py-1.5 text-xs font-bold text-amber-200 ring-1 ring-amber-400/25 transition hover:bg-amber-500/25 disabled:opacity-50"
+                >
+                  Close registration
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setEditError(null);
+                setEditOpen(true);
+              }}
+              className="rounded-xl bg-white/5 px-3 py-1.5 text-xs font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10 disabled:opacity-50"
+            >
+              Edit
+            </button>
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
@@ -216,12 +324,26 @@ export default function AdminWbTournamentCard({
               {stage === "registration" && (
                 <div className="space-y-4">
                   <div>
-                    <h4 className="mb-2 text-sm font-extrabold text-zinc-100">
-                      Registered teams ({teamCount})
-                    </h4>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-sm font-extrabold text-zinc-100">
+                        Registered teams ({teamCount})
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddError(null);
+                          setAddTeamOpen(true);
+                        }}
+                        className="rounded-xl bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25"
+                      >
+                        + Add team
+                      </button>
+                    </div>
                     <TeamsList
                       teams={detail.teams}
-                      renderActions={(t) => <AdminTeamControls team={t} onChanged={refresh} />}
+                      renderActions={(t) => (
+                        <AdminTeamControls team={t} tournament={tournament} onChanged={refresh} />
+                      )}
                     />
                   </div>
 
@@ -368,6 +490,52 @@ export default function AdminWbTournamentCard({
         busy={busy}
         onConfirm={doDelete}
         onCancel={() => setConfirmDelete(false)}
+      />
+
+      <EditWbTournamentDialog
+        tournament={tournament}
+        isOpen={editOpen}
+        busy={busy}
+        error={editError}
+        onSave={doUpdate}
+        onCancel={() => setEditOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmCloseReg}
+        title="Close registration now?"
+        message={`Sign-ups for "${tournament.name}" close immediately. You can extend or reopen them later.`}
+        tone="danger"
+        confirmLabel="Close registration"
+        busy={busy}
+        onConfirm={doCloseReg}
+        onCancel={() => setConfirmCloseReg(false)}
+      />
+
+      <DatePromptDialog
+        isOpen={extendRegOpen}
+        title="Extend registration"
+        description="Push the registration close time out so teams have more time to sign up (or reopen a closed window)."
+        label="Registration closes at"
+        initial={
+          tournament.registrationClosesAt
+            ? localInputValue(new Date(tournament.registrationClosesAt))
+            : undefined
+        }
+        confirmLabel="Save"
+        busy={busy}
+        onConfirm={doExtendReg}
+        onCancel={() => setExtendRegOpen(false)}
+      />
+
+      <WbRegisterDialog
+        isOpen={addTeamOpen}
+        tournament={tournament}
+        initialTeam={null}
+        busy={addBusy}
+        error={addError}
+        onSubmit={doAddTeam}
+        onCancel={() => setAddTeamOpen(false)}
       />
     </div>
   );

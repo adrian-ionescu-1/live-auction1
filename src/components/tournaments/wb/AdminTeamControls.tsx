@@ -1,36 +1,44 @@
-// Admin per-team controls in a WoT Blitz registration list: rename (+ symbol)
-// and delete. Roster edits stay with the captain; the admin manages identity and
-// removal. Rendered inside TeamsList via its renderActions slot.
+// Admin per-team controls in a WoT Blitz registration list: edit the full roster
+// (name, symbol AND players) or delete the team. Rendered inside TeamsList via
+// its renderActions slot; the parent passes the tournament so the editor knows
+// the format + validation region.
 
 "use client";
 
 import { useState } from "react";
-import { TournamentsService } from "@/services/tournamentsService";
-import { TournamentTeam } from "@/types/tournament.types";
-import SymbolPicker from "@/components/tournaments/wb/SymbolPicker";
+import { TournamentsService, WbMemberInput } from "@/services/tournamentsService";
+import { Tournament, TournamentTeam } from "@/types/tournament.types";
+import WbRegisterDialog from "@/components/tournaments/wb/WbRegisterDialog";
 import ConfirmActionDialog from "@/components/admin/ConfirmActionDialog";
 
 export default function AdminTeamControls({
   team,
+  tournament,
   onChanged,
 }: {
   team: TournamentTeam;
+  tournament: Tournament;
   onChanged: () => Promise<void> | void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(team.name);
-  const [symbol, setSymbol] = useState<string | null>(team.symbol);
+  const [editOpen, setEditOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const save = async () => {
+  const save = async (result: { name: string; symbol: string | null; members: WbMemberInput[] }) => {
     setBusy(true);
-    const res = await TournamentsService.adminUpdateWbTeam(team.id, name, symbol);
+    setError(null);
+    const res = await TournamentsService.adminSaveWbTeam(
+      team.id,
+      result.name,
+      result.symbol,
+      result.members
+    );
     setBusy(false);
     if (res.success) {
-      setEditing(false);
+      setEditOpen(false);
       await onChanged();
-    }
+    } else setError(res.error ?? "Could not save team");
   };
 
   const remove = async () => {
@@ -43,50 +51,35 @@ export default function AdminTeamControls({
 
   return (
     <div className="w-full">
-      {editing ? (
-        <div className="w-full space-y-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl bg-black/40 px-3 py-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-          />
-          <SymbolPicker value={symbol} onChange={setSymbol} />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={save}
-              className="rounded-xl bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25 disabled:opacity-50"
-            >
-              {busy ? "Saving…" : "Save"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="rounded-xl bg-white/5 px-3 py-1.5 text-xs font-bold text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/10"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/10"
-          >
-            Rename
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDelete(true)}
-            className="rounded-lg bg-red-500/15 px-2.5 py-1.5 text-xs font-semibold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/25"
-          >
-            Delete
-          </button>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setEditOpen(true);
+          }}
+          className="rounded-lg bg-white/5 px-2.5 py-1.5 text-xs font-semibold text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/10"
+        >
+          Edit team
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirmDelete(true)}
+          className="rounded-lg bg-red-500/15 px-2.5 py-1.5 text-xs font-semibold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/25"
+        >
+          Delete
+        </button>
+      </div>
+
+      <WbRegisterDialog
+        isOpen={editOpen}
+        tournament={tournament}
+        initialTeam={team}
+        busy={busy}
+        error={error}
+        onSubmit={save}
+        onCancel={() => setEditOpen(false)}
+      />
 
       <ConfirmActionDialog
         isOpen={confirmDelete}

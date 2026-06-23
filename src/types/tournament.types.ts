@@ -42,6 +42,8 @@ export interface Tournament {
   stage: WbStage | null;
   groupCount: number | null;
   advancePerGroup: number | null;
+  /** Roles allowed to see + register for this tournament (lowercased slugs). */
+  visibleRoles: string[];
 }
 
 /** One player on a team's roster (snapshot of an auction win). */
@@ -94,6 +96,12 @@ export interface TournamentTeam {
   strength: number | null;
   /** Validated players (WoT Blitz). Empty when not loaded / not applicable. */
   members: TournamentTeamMember[];
+}
+
+/** A team the signed-in member captains, with its full tournament (Profile). */
+export interface MyTournamentTeam {
+  team: TournamentTeam;
+  tournament: Tournament;
 }
 
 export interface TournamentRound {

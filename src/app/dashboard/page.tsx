@@ -23,6 +23,7 @@ import AccountMenu, { AccountAvatar } from "@/app/_components/AccountMenu";
 import ExcludedScreen from "@/app/_components/ExcludedScreen";
 import Logo from "@/app/_components/Logo";
 import MemberEvents from "@/components/community/MemberEvents";
+import MemberTournamentSignups from "@/components/tournaments/wb/MemberTournamentSignups";
 import TournamentsView from "@/components/tournaments/TournamentsView";
 import MemberContactForm from "@/components/contact/MemberContactForm";
 import DiscordCard from "@/components/contact/DiscordCard";
@@ -257,6 +258,9 @@ export default function DashboardPage() {
   const hasStreamer = roles.includes(STREAMER_ROLE);
   const hasWotBlitz = roles.includes(WOTBLITZ_ROLE);
   const isGuestOnly = !hasAdmin && !hasBidder && !hasStreamer && !hasWotBlitz;
+  // Tournaments can target wotblitz, bidder or streamer audiences, so the tab
+  // shows for any of them (the list itself is filtered by the member's roles).
+  const canSeeTournaments = hasWotBlitz || hasBidder || hasStreamer;
 
   // Events this member registered for + the ones open to their roles right now.
   const myRegistrations = useMemo(
@@ -377,11 +381,9 @@ export default function DashboardPage() {
       ? [{ id: "streaming", label: "Streaming", dot: unseenNotices.some((n) => n.tab === "streaming") }]
       : []),
     ...(hasWotBlitz || hasBidder
-      ? [
-          { id: "events", label: "Events", dot: unseenNotices.some((n) => n.tab === "events") },
-          { id: "tournaments", label: "Tournaments" },
-        ]
+      ? [{ id: "events", label: "Events", dot: unseenNotices.some((n) => n.tab === "events") }]
       : []),
+    ...(canSeeTournaments ? [{ id: "tournaments", label: "Tournaments" }] : []),
     { id: "contact", label: "Contact" },
   ];
 
@@ -493,11 +495,14 @@ export default function DashboardPage() {
           )}
 
           {active === "events" && (hasWotBlitz || hasBidder) && (
-            <MemberEvents roles={profile.roles} onChanged={refresh} />
+            <>
+              <MemberEvents roles={profile.roles} onChanged={refresh} />
+              <MemberTournamentSignups roles={profile.roles} myProfileId={profile.id} />
+            </>
           )}
 
-          {active === "tournaments" && (hasWotBlitz || hasBidder) && (
-            <TournamentsView myProfileId={profile.id} />
+          {active === "tournaments" && canSeeTournaments && (
+            <TournamentsView myProfileId={profile.id} roles={profile.roles} />
           )}
 
           {active === "contact" && (
