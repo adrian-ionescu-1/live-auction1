@@ -98,7 +98,7 @@ interface AuctionStoreState extends AuctionState {
   liveEvent: AuctionEvent | null;
   login: (userId: string, role: UserRole) => Promise<void>;
   logout: () => void;
-  startAuction: () => Promise<void>;
+  startAuction: () => Promise<{ success: boolean; error: string | null }>;
   pauseAuction: () => Promise<void>;
   resumeAuction: () => Promise<void>;
   placeBid: (amount: number) => Promise<{ success: boolean; error: string | null }>;
@@ -515,22 +515,42 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
   // ── startAuction (admin only) ──────────────────────────────
   startAuction: async () => {
     const state = get();
-    if (state.currentUserRole !== 'ADMIN') return;
-    if (state.status !== 'idle') return;
+    if (state.currentUserRole !== 'ADMIN') {
+      return { success: false, error: 'Only the admin can start the auction.' };
+    }
+    if (state.status !== 'idle') {
+      return { success: false, error: `Auction is not idle (status: ${state.status}).` };
+    }
 
-    const players = state.allPlayers;
+    // Reload the pool fresh: it may have been (re)built from a list AFTER this
+    // room was opened, so the store's allPlayers can be stale or empty here.
+    const players = await AuctionEngine.loadPlayers();
+    if (players.length > 0) set({ allPlayers: players });
     if (players.length === 0) {
-      alert('No players found in database');
-      return;
+      return {
+        success: false,
+        error:
+          'No players in the pool. Pick a player source / list when creating the auction, or seed the players table.',
+      };
     }
 
     const firstPlayer = players[0];
 
     // Server sets phase_ends_at authoritatively (no client-clock skew).
-    await supabase.rpc('start_auction', {
+    const { data, error } = await supabase.rpc('start_auction', {
       p_first_player_id: firstPlayer.id,
       p_total_players: players.length,
     });
+    if (error) return { success: false, error: error.message };
+    const d = (data ?? {}) as { success?: boolean; error?: string };
+    if (d.success === false) {
+      return { success: false, error: d.error ?? 'Could not start the auction.' };
+    }
+    // Safety net: reflect the started state locally (realtime fills the rest),
+    // then sync straight from the DB in case the realtime event is missed/delayed.
+    set({ status: 'countdown', currentPlayer: firstPlayer, currentPlayerIndex: 0 });
+    await get().reconcile();
+    return { success: true, error: null };
   },
 
   // ── pauseAuction (admin only) ──────────────────────────────
