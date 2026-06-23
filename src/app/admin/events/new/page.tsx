@@ -308,6 +308,9 @@ export default function CreateEventPage() {
   // has ended, instead of the players already in the database.
   const [lists, setLists] = useState<CommunityEvent[]>([]);
   const [selectedListId, setSelectedListId] = useState("");
+  // Order players come up for auction from the chosen list: "list" keeps the
+  // list's own order; "shuffle" randomizes it so a re-run isn't identical.
+  const [listOrder, setListOrder] = useState<"list" | "shuffle">("list");
   const [listPreview, setListPreview] = useState<CommunityRegistration[]>([]);
   const [listLoading, setListLoading] = useState(false);
   // Import a brand-new list (CSV/Excel, optionally Wargaming-validated) right
@@ -475,6 +478,7 @@ export default function CreateEventPage() {
     !submitting &&
     (name.trim() !== "" ||
       selectedListId !== "" ||
+      listOrder !== "list" ||
       excludedIds.size > 0 ||
       budgetTouched ||
       playerLimit !== "8" ||
@@ -519,7 +523,8 @@ export default function CreateEventPage() {
     if (selectedListId) {
       const pool = await CommunityEventsService.replacePlayersFromList(
         selectedListId,
-        openingNum
+        openingNum,
+        listOrder === "shuffle"
       );
       if (!pool.success) {
         setError(
@@ -886,6 +891,45 @@ export default function CreateEventPage() {
               </p>
             )}
 
+            {/* Player order: keep the list's own order, or shuffle so the same
+                list doesn't come down the belt in the same sequence twice. */}
+            {selectedListId && (
+              <div className="mt-3">
+                <span className="block text-xs font-semibold text-zinc-400">Player order</span>
+                <div className="mt-1.5 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setListOrder("list")}
+                    aria-pressed={listOrder === "list"}
+                    className={`rounded-xl px-3 py-2 text-xs font-bold ring-1 transition ${
+                      listOrder === "list"
+                        ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                        : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    List order
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setListOrder("shuffle")}
+                    aria-pressed={listOrder === "shuffle"}
+                    className={`rounded-xl px-3 py-2 text-xs font-bold ring-1 transition ${
+                      listOrder === "shuffle"
+                        ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                        : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    🔀 Shuffle
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11px] text-zinc-500">
+                  {listOrder === "shuffle"
+                    ? "Players come up in a random order, different every time."
+                    : "Players come up in the list's own order (as previewed below)."}
+                </p>
+              </div>
+            )}
+
             <div className="mt-3">
               {selectedListId ? (
                 listLoading ? (
@@ -961,7 +1005,9 @@ export default function CreateEventPage() {
             : "Opens immediately."
         }${
           selectedListId
-            ? ` Player pool: ${listPreview.length} from the selected registration list.`
+            ? ` Player pool: ${listPreview.length} from the selected registration list (${
+                listOrder === "shuffle" ? "shuffled order" : "list order"
+              }).`
             : ""
         } This becomes the live event.`}
         onConfirm={handleCreate}
