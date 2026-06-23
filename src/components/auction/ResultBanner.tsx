@@ -1,14 +1,23 @@
 'use client';
 
 import { useAuctionStore } from '@/store/auctionStore';
+import Flag from '@/components/community/Flag';
 
 export default function ResultBanner() {
-  const { status, currentPlayer, currentHighestBid, soldPlayers, resultMessage, countdown } =
+  const { status, currentPlayer, currentHighestBid, soldPlayers, resultMessage, countdown, users } =
     useAuctionStore();
 
   if (status !== 'result') {
     return null;
   }
+
+  // Winner's current name + flag, resolved live (admin renames / flags apply
+  // immediately); fall back to the captured bid name.
+  const winner = currentHighestBid
+    ? users.find((u) => u.id === currentHighestBid.userId)
+    : undefined;
+  const winnerName = winner?.username ?? currentHighestBid?.username ?? '';
+  const winnerFlag = winner?.flag ?? null;
 
   // Derive the outcome from server-truth state so it is correct on every client.
   const isSold = currentPlayer
@@ -49,7 +58,10 @@ export default function ResultBanner() {
         {isSold && currentPlayer && currentHighestBid ? (
           <p className="mb-6 text-lg text-zinc-100 sm:text-2xl">
             <span className="font-extrabold">{currentPlayer.name}</span> goes to{' '}
-            <span className="font-extrabold text-emerald-300">{currentHighestBid.username}</span>{' '}
+            <span className="inline-flex items-center gap-1.5 align-middle font-extrabold text-emerald-300">
+              <Flag code={winnerFlag} className="h-4 w-auto" />
+              {winnerName}
+            </span>{' '}
             for{' '}
             <span className="font-extrabold tabular-nums text-emerald-300">
               ${currentHighestBid.amount.toLocaleString()}

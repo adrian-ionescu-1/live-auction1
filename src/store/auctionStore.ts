@@ -398,6 +398,7 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                     balance: updatedUser.balance as number,
                     role: updatedUser.role as UserRole,
                     banned: !!updatedUser.banned,
+                    flag: (updatedUser.flag as string) ?? null,
                     // keep wonPlayers; playersChannel recomputes it
                     wonPlayers: u.wonPlayers,
                   }

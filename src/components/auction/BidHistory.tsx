@@ -1,9 +1,10 @@
 'use client';
 
 import { useAuctionStore } from '@/store/auctionStore';
+import Flag from '@/components/community/Flag';
 
 export default function BidHistory() {
-  const { bidHistory } = useAuctionStore();
+  const { bidHistory, users } = useAuctionStore();
 
   if (bidHistory.length === 0) {
     return null;
@@ -28,6 +29,11 @@ export default function BidHistory() {
       <div className="space-y-2 p-3 sm:p-4">
         {recentBids.map((bid, index) => {
           const isLatest = index === 0;
+          // Resolve the bidder's current name + flag live from the store, so an
+          // admin rename / flag change shows immediately (fallback: the snapshot).
+          const u = users.find((x) => x.id === bid.userId);
+          const name = u?.username ?? bid.username;
+          const flag = u?.flag ?? null;
 
           return (
             <div
@@ -47,11 +53,12 @@ export default function BidHistory() {
                 )}
                 <div className="min-w-0">
                   <p
-                    className={`truncate text-sm font-semibold ${
+                    className={`flex items-center gap-1.5 truncate text-sm font-semibold ${
                       isLatest ? 'text-emerald-200' : 'text-zinc-200'
                     }`}
                   >
-                    {bid.username}
+                    <Flag code={flag} className="h-3.5 w-auto" />
+                    <span className="truncate">{name}</span>
                   </p>
                   <p className="text-[11px] tabular-nums text-zinc-500">
                     {new Date(bid.timestamp).toLocaleTimeString()}

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
 import { AuctionEngine } from '@/services/auctionEngine';
+import Flag from '@/components/community/Flag';
 import { User } from '@/types/auction.types';
 import TargetProgress from './TargetProgress';
 import {
@@ -129,6 +130,7 @@ export default function AdminUserCards() {
                             : 'bg-zinc-500'
                         }`}
                       />
+                      <Flag code={user.flag} className="h-4 w-auto shrink-0" />
                       <h4 className="text-lg font-bold text-zinc-100 truncate">
                         {user.username}
                       </h4>
