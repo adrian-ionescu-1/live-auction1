@@ -132,6 +132,46 @@ export const FEATURES = [
   },
 ];
 
+// What we offer — the three services we host for communities. Each links to the
+// page that explains it (or to contact for a custom offer).
+export const SERVICES = [
+  {
+    icon: "🎟️",
+    title: "Community events",
+    desc: "Sign-up events for your community — custom registration, optional WoT Blitz account validation, and a live participant list.",
+    points: ["Custom registration fields", "WG account validation", "Participant management"],
+    href: "/contact",
+    cta: "Request an event →",
+    glow: "shadow-[0_0_60px_rgba(16,185,129,0.12)]",
+  },
+  {
+    icon: "🏆",
+    title: "Tournaments",
+    desc: "Two formats: a FIFA-style league with standings, or a WoT Blitz cup with seeded groups and an auto-advancing knockout bracket.",
+    points: ["Groups + bracket", "Seeded by win-rate", "Live standings & scores"],
+    href: "/tournaments",
+    cta: "See the formats →",
+    glow: "shadow-[0_0_60px_rgba(34,211,238,0.12)]",
+  },
+  {
+    icon: "⚡",
+    title: "Auction drafts",
+    desc: "Real-time bidding to build squads under a budget — the same energy as a FIFA draft, run live with admin control and re-auctions.",
+    points: ["Live real-time bidding", "Budget & pick caps", "Streamer broadcasts"],
+    href: "/rules",
+    cta: "How it works →",
+    glow: "shadow-[0_0_60px_rgba(236,72,153,0.10)]",
+  },
+];
+
+// What "we host it for you" includes — shown in the hosting / custom-offer band.
+export const HOSTING_POINTS = [
+  "We set up and run the whole event end-to-end",
+  "Custom format, rules and schedule for your community",
+  "Live hosting on our platform — nothing to install",
+  "Streamer-ready so the action can be broadcast",
+];
+
 export const FAQ_PREVIEW = [
   {
     q: "What if two users bid at the same time?",

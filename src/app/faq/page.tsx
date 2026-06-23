@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import SiteHeader from "../_components/SiteHeader";
 import CTASection from "../_components/CTASection";
+import HostBanner from "../_components/HostBanner";
 import Reveal from "../_components/Reveal";
 import { Badge, GlowLink, InfoCard, Divider } from "../_components/ui";
 
@@ -153,9 +154,15 @@ export default function FaqPage() {
         </Reveal>
 
         <Reveal className="mt-12">
+          <HostBanner />
+        </Reveal>
+
+        <Reveal className="mt-6">
           <CTASection
             title="Still need tournament details?"
-            subtitle="Read the format and rules — then enter with your access key."
+            subtitle="Read the format and rules — or get in touch to have an event hosted."
+            primaryHref="/contact"
+            primaryLabel="Get in touch"
             links={[
               { href: "/tournaments", label: "Tournament format", glow: "shadow-[0_0_60px_rgba(34,211,238,0.12)]" },
               { href: "/rules", label: "Rules", glow: "shadow-[0_0_60px_rgba(16,185,129,0.12)]" },

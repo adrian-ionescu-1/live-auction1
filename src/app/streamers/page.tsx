@@ -171,6 +171,7 @@ export default function StreamersPage() {
             links={[
               { href: "/login", label: "Sign in with Discord", glow: "shadow-[0_0_60px_rgba(139,92,246,0.16)]" },
               { href: "/tournaments", label: "Tournament format", glow: "shadow-[0_0_60px_rgba(34,211,238,0.12)]" },
+              { href: "/contact", label: "Contact", glow: "shadow-[0_0_60px_rgba(16,185,129,0.12)]" },
               { href: "/faq", label: "FAQ", glow: "shadow-[0_0_60px_rgba(255,255,255,0.08)]" },
             ]}
           />
