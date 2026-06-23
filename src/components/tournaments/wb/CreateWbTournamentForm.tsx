@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TournamentsService } from "@/services/tournamentsService";
 import { TEAM_FORMATS } from "@/lib/teamFormats";
+import { roleMeta, TOURNAMENT_AUDIENCE_ROLES } from "@/components/admin/roleMeta";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 const inputClass =
@@ -35,12 +36,22 @@ export default function CreateWbTournamentForm() {
   const [startsAt, setStartsAt] = useState("");
   const [regOpensAt, setRegOpensAt] = useState("");
   const [regClosesAt, setRegClosesAt] = useState("");
+  const [roles, setRoles] = useState<Set<string>>(new Set(["wotblitz", "bidder"]));
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const toIso = (local: string) => (local ? new Date(local).toISOString() : null);
-  const canSubmit = name.trim().length > 0 && !submitting;
+  const rolesValid = roles.size > 0;
+  const canSubmit = name.trim().length > 0 && rolesValid && !submitting;
+
+  const toggleRole = (role: string) =>
+    setRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(role)) next.delete(role);
+      else next.add(role);
+      return next;
+    });
 
   const handleSubmit = async () => {
     setConfirmOpen(false);
@@ -54,6 +65,7 @@ export default function CreateWbTournamentForm() {
       startsAt: toIso(startsAt),
       registrationOpensAt: toIso(regOpensAt),
       registrationClosesAt: toIso(regClosesAt),
+      visibleRoles: Array.from(roles),
     });
     if (res.success) {
       router.push("/admin/tournaments");
@@ -104,6 +116,38 @@ export default function CreateWbTournamentForm() {
             </Field>
           </div>
 
+          <Field
+            label="Who can see it"
+            hint="Pick the roles that see this tournament and can register a team."
+          >
+            <div className="grid grid-cols-1 gap-2 xs:grid-cols-2 sm:grid-cols-3">
+              {TOURNAMENT_AUDIENCE_ROLES.map((role) => {
+                const active = roles.has(role);
+                return (
+                  <label
+                    key={role}
+                    className={`flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 text-sm ring-1 transition ${
+                      active
+                        ? "bg-emerald-500/15 text-emerald-100 ring-emerald-400/25"
+                        : "bg-black/25 text-zinc-300 ring-white/10 hover:bg-white/5"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={active}
+                      onChange={() => toggleRole(role)}
+                      className="h-4 w-4 accent-emerald-500"
+                    />
+                    <span className="font-semibold">{roleMeta(role).label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {!rolesValid && (
+              <p className="mt-2 text-xs font-semibold text-amber-200">Select at least one role.</p>
+            )}
+          </Field>
+
           <Field label="Description" hint="Shown to members on the tournament card.">
             <textarea
               className={`${inputClass} min-h-[6rem] resize-y`}
@@ -144,7 +188,11 @@ export default function CreateWbTournamentForm() {
         title="Create this tournament?"
         message={`"${name.trim()}" — a WoT Blitz ${
           TEAM_FORMATS.find((f) => f.id === teamFormatId)?.label ?? teamFormatId
-        } tournament${region ? ` (${region.toUpperCase()} validation)` : ""}. It opens as a draft; publish it to start registration.`}
+        } tournament${region ? ` (${region.toUpperCase()} validation)` : ""}, visible to ${Array.from(
+          roles
+        )
+          .map((r) => roleMeta(r).label)
+          .join(", ")}. It opens as a draft; publish it to start registration.`}
         tone="primary"
         confirmLabel="Create tournament"
         busy={submitting}

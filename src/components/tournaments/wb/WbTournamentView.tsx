@@ -98,14 +98,6 @@ export default function WbTournamentView({
     await load();
   };
 
-  const lock = async () => {
-    if (!myTeam) return;
-    setBusy(true);
-    await TournamentsService.lockOwnTeam(myTeam.id);
-    setBusy(false);
-    await load();
-  };
-
   if (loading || !detail) {
     return <div className="h-28 animate-pulse rounded-2xl bg-black/20" />;
   }
@@ -167,7 +159,7 @@ export default function WbTournamentView({
                     </div>
                     <WbTeamName team={myTeam} />
                   </div>
-                  {regOpen && !myTeam.locked && (
+                  {regOpen ? (
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -181,24 +173,15 @@ export default function WbTournamentView({
                       </button>
                       <button
                         type="button"
-                        onClick={lock}
-                        disabled={busy}
-                        className="rounded-xl bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25 disabled:opacity-50"
-                      >
-                        Close team
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setConfirmWithdraw(true)}
                         className="rounded-xl bg-red-500/15 px-3 py-1.5 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/25"
                       >
-                        Withdraw
+                        Cancel team
                       </button>
                     </div>
-                  )}
-                  {myTeam.locked && (
+                  ) : (
                     <span className="rounded-full bg-white/5 px-2.5 py-1 text-[11px] font-bold text-zinc-300 ring-1 ring-white/10">
-                      Closed
+                      Locked in
                     </span>
                   )}
                 </div>
@@ -273,9 +256,9 @@ export default function WbTournamentView({
 
       <ConfirmActionDialog
         isOpen={confirmWithdraw}
-        title="Withdraw team"
-        description="Remove your team from this tournament? You can register again while the window is open."
-        confirmLabel="Withdraw"
+        title="Cancel team"
+        description="Remove your team from this tournament? You can register again while sign-ups are open."
+        confirmLabel="Cancel team"
         tone="danger"
         busy={busy}
         onConfirm={withdraw}

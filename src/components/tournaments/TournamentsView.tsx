@@ -148,16 +148,34 @@ function TournamentCard({
   );
 }
 
-export default function TournamentsView({ myProfileId = null }: { myProfileId?: string | null }) {
+export default function TournamentsView({
+  myProfileId = null,
+  roles = [],
+}: {
+  myProfileId?: string | null;
+  /** The member's roles — a tournament shows only if it targets one of them. */
+  roles?: string[];
+}) {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const lc = roles.map((r) => r.toLowerCase());
+    const isAdmin = lc.includes("admin");
     TournamentsService.listVisibleTournaments().then((list) => {
-      setTournaments(list);
+      // A tournament shows if it targets any of the member's roles (admins see
+      // all). An empty visible_roles list means it's open to everyone.
+      setTournaments(
+        list.filter(
+          (t) =>
+            isAdmin ||
+            t.visibleRoles.length === 0 ||
+            t.visibleRoles.some((r) => lc.includes(r))
+        )
+      );
       setLoading(false);
     });
-  }, []);
+  }, [roles]);
 
   const grouped = useMemo(() => {
     const g: Record<TournamentPhase, Tournament[]> = { upcoming: [], current: [], past: [] };

@@ -14,6 +14,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import ConsentConfirmDialog from "@/components/dashboard/ConsentConfirmDialog";
 import BlitzAccountLinker from "@/components/dashboard/BlitzAccountLinker";
 import BlitzStatsCards from "@/components/dashboard/BlitzStatsCards";
+import MyTournamentTeamsCard from "@/components/tournaments/wb/MyTournamentTeamsCard";
 
 export interface DashboardNotice {
   id: string;
@@ -221,6 +222,8 @@ export default function ProfileSection({
       )}
 
       <RegistrationsCard events={registrations} myRegs={myRegs} onWithdraw={setWithdrawing} />
+
+      <MyTournamentTeamsCard profileId={profile.id} />
 
       {/* Switch-account guard: make sure it's really their own account. */}
       <ConfirmDialog

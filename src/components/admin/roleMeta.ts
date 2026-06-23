@@ -18,6 +18,10 @@ export const ROLE_ORDER = ["admin", "bidder", "streamer", "wotblitz", "guest", "
 // Roles an admin can pick in the action popover.
 export const ASSIGNABLE_ROLES = ["guest", "wotblitz", "bidder", "streamer", "admin", "excluded"];
 
+// The member audiences a WoT Blitz tournament can target. Guests/excluded/admin
+// never register teams, so only these are offered when picking who sees it.
+export const TOURNAMENT_AUDIENCE_ROLES = ["wotblitz", "bidder", "streamer"];
+
 export function roleMeta(role: string): RoleMeta {
   return (
     ROLE_META[role.toLowerCase()] ?? {
