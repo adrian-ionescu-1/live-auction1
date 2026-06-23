@@ -5,6 +5,7 @@ import "./globals.css";
 import SiteBackground from "./_components/SiteBackground";
 import Logo from "./_components/Logo";
 import AccountPresence from "./_components/AccountPresence";
+import AuthRedirectOnLogin from "./_components/AuthRedirectOnLogin";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
@@ -113,6 +114,7 @@ export default function RootLayout({
           <SiteFooter />
         </div>
         <AccountPresence />
+        <AuthRedirectOnLogin />
         <Analytics />
         <SpeedInsights />
       </body>
