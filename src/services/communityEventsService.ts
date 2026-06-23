@@ -403,14 +403,17 @@ export class CommunityEventsService {
   /**
    * Replace the auction player pool with the participants of a community list
    * (guarded). Used when creating an auction from a finished registration list.
+   * Pass shuffle = true to randomize the order players come up for auction.
    */
   static async replacePlayersFromList(
     listEventId: string,
-    basePrice: number
+    basePrice: number,
+    shuffle = false
   ): Promise<{ success: boolean; count: number; error: string | null }> {
     const { data, error } = await supabase.rpc("admin_replace_players_from_list", {
       p_list_event_id: listEventId,
       p_base_price: basePrice,
+      p_shuffle: shuffle,
       p_admin_key: adminKey(),
     });
     if (error) return { success: false, count: 0, error: error.message };
