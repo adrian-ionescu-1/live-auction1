@@ -2,13 +2,37 @@ import type { Metadata } from "next";
 import SiteHeader from "../_components/SiteHeader";
 import CTASection from "../_components/CTASection";
 import Reveal from "../_components/Reveal";
-import { Badge, GlowLink, Divider } from "../_components/ui";
+import { Badge, GlowLink, Divider, GradientCard } from "../_components/ui";
+import HostBanner from "../_components/HostBanner";
 
 export const metadata: Metadata = {
-  title: "Tournament Format • Auction App",
+  title: "Tournament Formats • Auction App",
   description:
-    "How tournament auctions are organized: teams, budgets, pick caps, auction pacing and the overall draft flow for WoT Blitz.",
+    "The WoT Blitz formats we run: a FIFA-style league with standings, a cup with seeded groups and a knockout bracket, and live auction drafts — teams, budgets, pacing and flow.",
 };
+
+// The competition formats we host. Shown as cards so visitors see everything on
+// offer at a glance.
+const FORMATS = [
+  {
+    icon: "🏆",
+    name: "FIFA-style league",
+    desc: "Every team plays the others; results feed a live standings table (P, W, D, L, SD, PTS) until a champion emerges.",
+    points: ["Round-robin standings", "Top scorers & MVP tags", "Auto-updated table"],
+  },
+  {
+    icon: "🎯",
+    name: "WoT Blitz cup",
+    desc: "Teams register and validate real accounts, get drawn into seeded groups, then battle through a knockout bracket that auto-advances by score.",
+    points: ["Seeded by win-rate", "Groups → bracket", "Auto-advancing matches"],
+  },
+  {
+    icon: "⚡",
+    name: "Auction draft",
+    desc: "Build a squad through live, real-time bidding under a budget — a FIFA-style draft for tanks, run with admin control and re-auctions.",
+    points: ["Real-time bidding", "Budget & pick caps", "Streamer broadcasts"],
+  },
+];
 
 export default function TournamentsPage() {
   return (
@@ -33,9 +57,9 @@ export default function TournamentsPage() {
                 </span>
               </h1>
               <p className="mt-4 max-w-xl text-zinc-300">
-                This page explains how tournament auctions are organized: teams,
-                budgets, pick caps, and the overall flow. Organizers can adopt
-                this standard format or tweak it for a specific season.
+                We run several WoT Blitz formats — a FIFA-style league, a cup with
+                seeded groups and a knockout bracket, and live auction drafts. Adopt a
+                standard format or ask us to tailor one for your season.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -137,6 +161,31 @@ export default function TournamentsPage() {
             </div>
           </div>
 
+          {/* Formats we run */}
+          <Reveal className="mt-4">
+            <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">Formats we run</div>
+            <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">Pick a format — or mix them</h2>
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {FORMATS.map((f) => (
+                <GradientCard key={f.name} className="p-6">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 text-2xl ring-1 ring-white/10">
+                    <span aria-hidden>{f.icon}</span>
+                  </div>
+                  <div className="mt-4 text-base font-extrabold text-zinc-100">{f.name}</div>
+                  <div className="mt-2 text-sm text-zinc-400">{f.desc}</div>
+                  <ul className="mt-4 space-y-1.5">
+                    {f.points.map((p) => (
+                      <li key={p} className="flex items-center gap-2 text-sm text-zinc-300">
+                        <span aria-hidden className="text-emerald-300">◆</span>
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </GradientCard>
+              ))}
+            </div>
+          </Reveal>
+
           <div className="my-6">
             <Divider />
           </div>
@@ -199,9 +248,18 @@ export default function TournamentsPage() {
           </Reveal>
 
           <Reveal className="mt-10">
+            <HostBanner
+              title="Want one of these run for your community?"
+              subtitle="Tell us the format, size and dates — league, cup or auction draft — and we'll set it up, host it live and send a custom offer."
+            />
+          </Reveal>
+
+          <Reveal className="mt-6">
             <CTASection
               title="Join the tournament draft"
               subtitle="Participants enter using an access key provided by the organizer."
+              primaryHref="/contact"
+              primaryLabel="Get in touch"
               links={[
                 { href: "/rules", label: "Rules", glow: "shadow-[0_0_60px_rgba(16,185,129,0.10)]" },
                 { href: "/faq", label: "FAQ", glow: "shadow-[0_0_60px_rgba(255,255,255,0.08)]" },

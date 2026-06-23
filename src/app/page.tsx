@@ -3,6 +3,7 @@ import SiteHeader from "./_components/SiteHeader";
 import CTASection from "./_components/CTASection";
 import Reveal from "./_components/Reveal";
 import PlayerShowcaseCard from "./_components/PlayerShowcaseCard";
+import HostBanner from "./_components/HostBanner";
 import { GlowLink, PrimaryLink, InfoCard, Divider, GradientCard } from "./_components/ui";
 import {
   TICKER,
@@ -10,13 +11,14 @@ import {
   STEPS,
   PLAYERS,
   FEATURES,
+  SERVICES,
   FAQ_PREVIEW,
 } from "./_data/home-content";
 
 export const metadata: Metadata = {
   title: "Auction App • WoT Blitz Tournament Draft",
   description:
-    "Arena-style auction draft for WoT Blitz tournaments: bid live for the best players, build your roster under a budget, and follow every pick in real time — FIFA-style drafting for esports.",
+    "We host WoT Blitz events, tournaments and live auction drafts for communities — groups & brackets, real-time bidding, streamer broadcasts. We run it for you and tailor the offer.",
 };
 
 function StepIcon({ children }: { children: React.ReactNode }) {
@@ -65,22 +67,24 @@ export default function HomeLanding() {
             </h1>
 
             <p className="mt-5 max-w-xl text-base text-zinc-300 sm:text-lg">
-              The auction draft built for WoT Blitz tournaments — same energy as a
-              FIFA draft, but for tanks. Bid live for top players, manage a budget,
-              and assemble your roster while everyone watches in real time.
+              We host WoT Blitz <span className="font-semibold text-zinc-100">events</span>,{" "}
+              <span className="font-semibold text-zinc-100">tournaments</span> and live{" "}
+              <span className="font-semibold text-zinc-100">auction drafts</span> for communities —
+              groups &amp; brackets, real-time bidding and streamer broadcasts. We set it up, run it
+              live, and tailor the offer to what you need.
             </p>
 
             <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
               <PrimaryLink
-                href="/login"
+                href="/contact"
                 size="md"
-                glow="shadow-[0_0_60px_rgba(34,211,238,0.18)]"
+                glow="shadow-[0_0_60px_rgba(16,185,129,0.2)]"
               >
-                Enter the Draft
+                Host with us
               </PrimaryLink>
 
-              <GlowLink href="/tournaments" glow="shadow-[0_0_50px_rgba(34,211,238,0.12)]">
-                How the draft works <span aria-hidden>→</span>
+              <GlowLink href="/login" glow="shadow-[0_0_50px_rgba(34,211,238,0.12)]">
+                Enter the draft <span aria-hidden>→</span>
               </GlowLink>
             </div>
 
@@ -200,6 +204,53 @@ export default function HomeLanding() {
                   {s.v}
                 </div>
                 <div className="mt-1 text-xs text-zinc-400">{s.k}</div>
+              </GradientCard>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* What we offer (services) */}
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-16 sm:px-6">
+        <Reveal>
+          <div className="text-center">
+            <div className="text-xs uppercase tracking-[0.22em] text-zinc-400">What we offer</div>
+            <h2 className="mt-2 text-2xl font-extrabold sm:text-3xl">
+              Events, tournaments &amp; auction drafts
+            </h2>
+            <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-400">
+              Everything we host for WoT Blitz communities — pick a format, or ask for a custom mix.
+            </p>
+          </div>
+        </Reveal>
+
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {SERVICES.map((s, i) => (
+            <Reveal key={s.title} delay={i * 90}>
+              <GradientCard className="p-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 text-2xl ring-1 ring-white/10 transition duration-300 group-hover:scale-110">
+                  <span aria-hidden>{s.icon}</span>
+                </div>
+                <div className="mt-4 text-base font-extrabold text-zinc-100">{s.title}</div>
+                <div className="mt-2 text-sm text-zinc-400">{s.desc}</div>
+                <ul className="mt-4 space-y-1.5">
+                  {s.points.map((p) => (
+                    <li key={p} className="flex items-center gap-2 text-sm text-zinc-300">
+                      <span aria-hidden className="text-emerald-300">
+                        ◆
+                      </span>
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-5">
+                  <Divider via="via-white/10" />
+                </div>
+                <div className="mt-4">
+                  <GlowLink href={s.href} glow={s.glow}>
+                    {s.cta}
+                  </GlowLink>
+                </div>
               </GradientCard>
             </Reveal>
           ))}
@@ -355,8 +406,15 @@ export default function HomeLanding() {
         </Reveal>
       </section>
 
+      {/* Hosting / custom offer */}
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-8 sm:px-6">
+        <Reveal>
+          <HostBanner />
+        </Reveal>
+      </section>
+
       {/* FAQ preview */}
-      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-2 pb-12 sm:px-6">
+      <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pt-12 pb-12 sm:px-6">
         <Reveal>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -383,12 +441,13 @@ export default function HomeLanding() {
       <section className="relative z-10 mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
         <Reveal>
           <CTASection
-            title="Ready to enter the arena?"
-            subtitle="Participants join using an access key provided by the tournament organizer."
-            primaryLabel="Enter Auction"
+            title="Ready to run your event?"
+            subtitle="Tell us what you have in mind — events, tournaments or an auction draft — and we'll tailor an offer. Participants join using an access key from the organizer."
+            primaryHref="/contact"
+            primaryLabel="Get in touch"
             links={[
-              { href: "/streamers", label: "Streamers", glow: "shadow-[0_0_60px_rgba(139,92,246,0.14)]" },
               { href: "/tournaments", label: "Tournament format", glow: "shadow-[0_0_60px_rgba(34,211,238,0.12)]" },
+              { href: "/streamers", label: "Streamers", glow: "shadow-[0_0_60px_rgba(139,92,246,0.14)]" },
               { href: "/rules", label: "Rules", glow: "shadow-[0_0_60px_rgba(16,185,129,0.10)]" },
               { href: "/faq", label: "FAQ", glow: "shadow-[0_0_60px_rgba(255,255,255,0.08)]" },
             ]}

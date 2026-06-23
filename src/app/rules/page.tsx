@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import SiteHeader from "../_components/SiteHeader";
 import CTASection from "../_components/CTASection";
+import HostBanner from "../_components/HostBanner";
 import Reveal from "../_components/Reveal";
 import { Badge, GlowLink, InfoCard, Divider } from "../_components/ui";
 
@@ -150,9 +151,15 @@ export default function RulesPage() {
         </Reveal>
 
         <Reveal className="mt-12">
+          <HostBanner />
+        </Reveal>
+
+        <Reveal className="mt-6">
           <CTASection
             title="Ready to bid under fair rules?"
             subtitle="Participants enter using an access key provided by the organizer."
+            primaryHref="/contact"
+            primaryLabel="Get in touch"
             links={[
               { href: "/tournaments", label: "Tournament format", glow: "shadow-[0_0_60px_rgba(34,211,238,0.10)]" },
               { href: "/faq", label: "FAQ", glow: "shadow-[0_0_60px_rgba(255,255,255,0.08)]" },
