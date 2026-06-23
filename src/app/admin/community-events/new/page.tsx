@@ -22,6 +22,9 @@ import {
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import UnsavedChangesGuard from "@/components/admin/UnsavedChangesGuard";
 import CreateWbTournamentForm from "@/components/tournaments/wb/CreateWbTournamentForm";
+import ImportListDialog, { ImportedRow } from "@/components/community/ImportListDialog";
+import { randomVariantId } from "@/components/auction/cardDesigns";
+import { randomCountryCode } from "@/lib/flags";
 
 const inputClass =
   "w-full min-w-0 rounded-xl bg-black/30 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40";
@@ -307,6 +310,11 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
 
   const [fields, setFields] = useState<RegistrationField[]>([]);
 
+  // Optional: a participant list the admin uploads at creation time. Staged in
+  // memory (the event has no id yet) and written once the event is created.
+  const [importing, setImporting] = useState(false);
+  const [importedRows, setImportedRows] = useState<ImportedRow[]>([]);
+
   const [submitting, setSubmitting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -357,7 +365,23 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
       regOpensAt !== "" ||
       regClosesAt !== "" ||
       fields.length > 0 ||
+      importedRows.length > 0 ||
       !(roles.size === 1 && roles.has("bidder")));
+
+  // Stage an imported list (deduped by name). Written to the event after it is
+  // created. Validated rows keep their real Wargaming account + stats.
+  const handleImportStage = (rows: ImportedRow[]) => {
+    const seen = new Set<string>();
+    const deduped: ImportedRow[] = [];
+    for (const r of rows) {
+      const key = r.displayName.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(r);
+    }
+    setImportedRows(deduped);
+    setImporting(false);
+  };
 
   const handleSubmit = async () => {
     setConfirmOpen(false);
@@ -379,12 +403,40 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
       registrationFields: fields,
       region: region || null,
     });
-    if (res.success) {
-      router.push("/admin/community-events");
-    } else {
+    if (!res.success || !res.eventId) {
       setError(res.error ?? "Could not create the event");
       setSubmitting(false);
+      return;
     }
+
+    // Write the staged import (if any) into the new event's participant list.
+    if (importedRows.length > 0) {
+      let skipped = 0;
+      for (const r of importedRows) {
+        const blitz =
+          r.validated && r.accountId != null
+            ? { accountId: r.accountId, playerName: r.displayName, stats: r.stats! }
+            : r.stats
+              ? { playerName: r.displayName, stats: r.stats }
+              : null;
+        const added = await CommunityEventsService.addRegistration(
+          res.eventId,
+          r.displayName,
+          r.values,
+          blitz,
+          null,
+          { variant: randomVariantId(), flag: randomCountryCode() }
+        );
+        if (!added.success) skipped += 1;
+      }
+      if (skipped > 0) {
+        // The event was created; surface that some imported rows didn't take,
+        // but still continue to the events list.
+        console.warn(`Imported list: ${skipped} participant(s) could not be added.`);
+      }
+    }
+
+    router.push("/admin/community-events");
   };
 
   return (
@@ -632,6 +684,50 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
           <RegistrationFieldsEditor fields={fields} onChange={setFields} optional={blitzValidation} />
         </Section>
 
+        {/* 6. Pre-loaded participants (optional) */}
+        <Section
+          step={6}
+          title="Participants (optional)"
+          desc="Upload a whole list now instead of (or in addition to) members self-registering."
+        >
+          {importedRows.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => setImporting(true)}
+              className="w-full rounded-xl bg-white/5 px-3 py-2.5 text-sm font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
+            >
+              ⬆ Import a list (CSV/Excel)…
+            </button>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-500/10 px-4 py-3 ring-1 ring-emerald-400/25">
+              <span className="text-sm font-semibold text-emerald-100">
+                {importedRows.length} participant(s) staged
+                {importedRows.some((r) => r.validated) ? " · Wargaming-validated" : ""}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImporting(true)}
+                  className="rounded-xl bg-white/5 px-3 py-1.5 text-xs font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportedRows([])}
+                  className="rounded-xl px-3 py-1.5 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/15"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-zinc-500">
+            They&apos;ll be added to this event&apos;s participant list when you create it. Use the
+            list later to feed an auction.
+          </p>
+        </Section>
+
         {error && <p className="text-sm font-semibold text-red-200">{error}</p>}
 
         <button
@@ -650,12 +746,27 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
           .map((r) => roleMeta(r).label)
           .join(", ")}. ${fields.length} registration field(s).${
           hasLink ? " Includes a link button." : ""
+        }${
+          importedRows.length > 0
+            ? ` ${importedRows.length} participant(s) pre-loaded from an import.`
+            : ""
         } Members can register within the window you set.`}
         tone="primary"
         confirmLabel="Create event"
         busy={submitting}
         onConfirm={handleSubmit}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      {/* Import participants now. If a Blitz region is set above, validation is
+          fixed to it; otherwise the admin picks the region in the dialog. */}
+      <ImportListDialog
+        isOpen={importing}
+        eventTitle={title.trim() || "this event"}
+        region={region || null}
+        busy={false}
+        onImport={handleImportStage}
+        onCancel={() => setImporting(false)}
       />
     </>
   );

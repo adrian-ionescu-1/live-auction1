@@ -231,13 +231,20 @@ export default function CommunityParticipantsPage() {
         continue;
       }
       seen.add(key);
-      // Imported rows usually lack card/flag info, so assign each a random card
-      // design and a random country flag.
+      // Validated rows carry the real Wargaming account; file-data rows keep
+      // whatever stats the file had. Imported rows have no card art, so assign
+      // each a random card design and a random country flag.
+      const blitz =
+        r.validated && r.accountId != null
+          ? { accountId: r.accountId, playerName: r.displayName, stats: r.stats! }
+          : r.stats
+            ? { playerName: r.displayName, stats: r.stats }
+            : null;
       const res = await CommunityEventsService.addRegistration(
         id,
         r.displayName,
         r.values,
-        r.stats ? { playerName: r.displayName, stats: r.stats } : null,
+        blitz,
         null,
         { variant: randomVariantId(), flag: randomCountryCode() }
       );
@@ -668,10 +675,12 @@ export default function CommunityParticipantsPage() {
           document.body
         )}
 
-      {/* Import a list from CSV / Excel. */}
+      {/* Import a list from CSV / Excel. The list's region (if any) fixes the
+          Wargaming validation region. */}
       <ImportListDialog
         isOpen={importingTo !== null}
         eventTitle={importingTo?.title ?? ""}
+        region={importingTo?.region ?? null}
         busy={busy}
         onImport={handleImport}
         onCancel={() => setImportingTo(null)}
