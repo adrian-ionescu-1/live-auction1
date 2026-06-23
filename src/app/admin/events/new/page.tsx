@@ -8,7 +8,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MembersService } from "@/services/membersService";
 import { EventsService } from "@/services/eventsService";
@@ -22,6 +22,9 @@ import { useMembersPresence } from "@/app/_components/useMembersPresence";
 import { AccountAvatar } from "@/app/_components/AccountMenu";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import UnsavedChangesGuard from "@/components/admin/UnsavedChangesGuard";
+import ImportListDialog, { ImportedRow } from "@/components/community/ImportListDialog";
+import { randomVariantId } from "@/components/auction/cardDesigns";
+import { randomCountryCode } from "@/lib/flags";
 
 const inputClass =
   "w-full rounded-xl bg-black/30 px-4 py-3 text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40";
@@ -307,6 +310,11 @@ export default function CreateEventPage() {
   const [selectedListId, setSelectedListId] = useState("");
   const [listPreview, setListPreview] = useState<CommunityRegistration[]>([]);
   const [listLoading, setListLoading] = useState(false);
+  // Import a brand-new list (CSV/Excel, optionally Wargaming-validated) right
+  // here: it becomes a standalone list and is selected as the player source.
+  const [importing, setImporting] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -327,25 +335,81 @@ export default function CreateEventPage() {
     };
   }, []);
 
-  // Load community lists whose registration has ended — those can feed the auction.
-  useEffect(() => {
-    let active = true;
-    CommunityEventsService.listEvents().then((all) => {
-      if (!active) return;
-      setLists(
-        all.filter(
-          (e) =>
-            // Standalone lists are always usable; event lists once registration ended.
-            e.kind === "list" ||
-            (e.registrationClosesAt !== null &&
-              registrationState(e.registrationOpensAt, e.registrationClosesAt) === "closed")
-        )
-      );
-    });
-    return () => {
-      active = false;
-    };
+  // Community lists that can feed the auction: standalone lists always, plus
+  // event lists whose registration has ended.
+  const loadLists = useCallback(async () => {
+    const all = await CommunityEventsService.listEvents();
+    const usable = all.filter(
+      (e) =>
+        e.kind === "list" ||
+        (e.registrationClosesAt !== null &&
+          registrationState(e.registrationOpensAt, e.registrationClosesAt) === "closed")
+    );
+    setLists(usable);
+    return usable;
   }, []);
+
+  useEffect(() => {
+    loadLists().catch(() => {});
+  }, [loadLists]);
+
+  // Import a CSV/Excel file into a new standalone list and select it as the
+  // player source. Reuses the shared import dialog (file data or Wargaming
+  // validation), the participant-list RPCs and the same dedupe + random card.
+  const handleImportToAuction = async (rows: ImportedRow[]) => {
+    setImportBusy(true);
+    setImportNote(null);
+    // Include the time so re-importing never collides with an earlier list name.
+    const stamp = new Date().toLocaleString();
+    const listName = name.trim()
+      ? `${name.trim()} — imported list (${stamp})`
+      : `Imported list (${stamp})`;
+    const created = await CommunityEventsService.createParticipantList(listName, null);
+    if (!created.success || !created.eventId) {
+      setImportNote(created.error ?? "Could not create the import list.");
+      setImportBusy(false);
+      return;
+    }
+    const listId = created.eventId;
+    const seen = new Set<string>();
+    let ok = 0;
+    let skipped = 0;
+    for (const r of rows) {
+      const key = r.displayName.trim().toLowerCase();
+      if (!key || seen.has(key)) {
+        skipped += 1;
+        continue;
+      }
+      seen.add(key);
+      const blitz =
+        r.validated && r.accountId != null
+          ? { accountId: r.accountId, playerName: r.displayName, stats: r.stats! }
+          : r.stats
+            ? { playerName: r.displayName, stats: r.stats }
+            : null;
+      const res = await CommunityEventsService.addRegistration(
+        listId,
+        r.displayName,
+        r.values,
+        blitz,
+        null,
+        { variant: randomVariantId(), flag: randomCountryCode() }
+      );
+      if (res.success) ok += 1;
+      else skipped += 1;
+    }
+    await loadLists();
+    setSelectedListId(listId);
+    setImporting(false);
+    setImportBusy(false);
+    setImportNote(
+      ok === 0
+        ? "No players could be imported."
+        : skipped > 0
+          ? `Imported ${ok} player(s) into a new list. ${skipped} skipped (duplicates or errors).`
+          : `Imported ${ok} player(s) into a new list, now selected below.`
+    );
+  };
 
   // Load the chosen list's participants for preview (and to confirm the count).
   useEffect(() => {
@@ -792,11 +856,28 @@ export default function CreateEventPage() {
               </select>
               {lists.length === 0 && (
                 <span className="mt-1 block text-[11px] text-zinc-500">
-                  No finished registration lists yet — close an event&apos;s registration to use it
-                  here.
+                  No finished registration lists yet — close an event&apos;s registration, or import
+                  a file below.
                 </span>
               )}
             </label>
+
+            {/* Import a brand-new list right here (CSV/Excel, optional WG validation). */}
+            <button
+              type="button"
+              onClick={() => {
+                setImportNote(null);
+                setImporting(true);
+              }}
+              className="mt-3 w-full rounded-xl bg-white/5 px-3 py-2.5 text-sm font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
+            >
+              ⬆ Import a list (CSV/Excel)…
+            </button>
+            {importNote && (
+              <p className="mt-2 rounded-xl bg-black/30 px-3 py-2 text-[11px] text-zinc-300 ring-1 ring-white/10">
+                {importNote}
+              </p>
+            )}
 
             {selectedListId && (
               <p className="mt-2 rounded-xl bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200/90 ring-1 ring-emerald-400/25">
@@ -885,6 +966,17 @@ export default function CreateEventPage() {
         } This becomes the live event.`}
         onConfirm={handleCreate}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      {/* Import a CSV/Excel list as the auction's player pool. The admin picks the
+          Wargaming region inside the dialog when using validation. */}
+      <ImportListDialog
+        isOpen={importing}
+        eventTitle={name.trim() || "this auction"}
+        region={null}
+        busy={importBusy}
+        onImport={handleImportToAuction}
+        onCancel={() => setImporting(false)}
       />
     </>
   );

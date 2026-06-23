@@ -18,7 +18,7 @@ server is the single source of truth).
 | Area | Summary |
 | --- | --- |
 | ⚡ **Auction drafts** | Real-time bidding under a budget — a FIFA-style draft for tanks. Server-settled, concurrency-safe, anti-snipe timer, re-auction of unsold players. |
-| 🎟️ **Community events** | Admin-posted events members register for, with custom fields and optional Wargaming account validation (EU/NA/ASIA). |
+| 🎟️ **Community events** | Admin-posted events members register for, with custom fields and optional Wargaming account validation (EU/NA/ASIA). Admins can also bulk-import participant lists from CSV/Excel — either using the file's own stats, or validating every name on Wargaming (real stats fetched automatically, duplicates and not-found names flagged before import). |
 | 🏆 **Tournaments — FIFA** | Built from a finished auction: bidders become national teams, results feed a live standings table (P/W/D/L/SF/SA/SD/PTS), with a podium. |
 | 🎯 **Tournaments — WoT Blitz** | Teams self-register (validated rosters), get drawn into seeded groups, then play a single-elimination bracket that auto-advances by score. |
 | 🎥 **Streaming** | A watch-only broadcast room (live player, timer, price, bids) for going live on YouTube / Twitch / TikTok. |
