@@ -59,7 +59,6 @@ export default function BlitzAccountLinker({
   useEffect(() => {
     const handle = setTimeout(() => void runSearch(region, name), 350);
     return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, region]);
 
   const pick = async (acc: BlitzAccount) => {
