@@ -57,6 +57,8 @@ export default function AdminControls() {
   const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
   const [showEarlyStartConfirm, setShowEarlyStartConfirm] = useState(false);
   const [startingEarly, setStartingEarly] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [finalizing, setFinalizing] = useState(false);
   const [extendError, setExtendError] = useState<string | null>(null);
 
@@ -64,17 +66,28 @@ export default function AdminControls() {
   const opensAtMs = liveEvent?.opensAt ? new Date(liveEvent.opensAt).getTime() : null;
   const isScheduledEarly = opensAtMs !== null && opensAtMs > Date.now();
 
+  const runStart = async () => {
+    setStartError(null);
+    setStarting(true);
+    const res = await startAuction();
+    setStarting(false);
+    if (!res.success) setStartError(res.error ?? 'Could not start the auction.');
+    return res.success;
+  };
+
   const handleStartClick = () => {
     if (isScheduledEarly) setShowEarlyStartConfirm(true);
-    else void startAuction();
+    else void runStart();
   };
 
   const handleEarlyStartConfirm = async () => {
     setStartingEarly(true);
+    setStartError(null);
     await EventsService.openLiveEventNow();
-    await startAuction();
+    const res = await startAuction();
     setStartingEarly(false);
     setShowEarlyStartConfirm(false);
+    if (!res.success) setStartError(res.error ?? 'Could not start the auction.');
   };
 
   const canFinalize =
@@ -156,10 +169,16 @@ export default function AdminControls() {
             <div className="space-y-2">
               <button
                 onClick={handleStartClick}
-                className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/25 to-emerald-400/15 py-3.5 px-6 text-sm font-extrabold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:from-emerald-500/35 hover:to-emerald-400/25 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                disabled={starting}
+                className="w-full rounded-2xl bg-gradient-to-r from-emerald-500/25 to-emerald-400/15 py-3.5 px-6 text-sm font-extrabold text-emerald-100 ring-1 ring-emerald-400/30 transition hover:from-emerald-500/35 hover:to-emerald-400/25 active:scale-[0.98] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
               >
-                ▶ Start auction
+                {starting ? 'Starting…' : '▶ Start auction'}
               </button>
+              {startError && (
+                <p className="rounded-xl bg-red-500/10 px-3 py-2 text-center text-[11px] font-semibold text-red-200 ring-1 ring-red-400/25">
+                  {startError}
+                </p>
+              )}
               {isScheduledEarly && opensAtMs !== null && (
                 <p className="rounded-xl bg-amber-500/10 px-3 py-2 text-center text-[11px] text-amber-200 ring-1 ring-amber-400/20">
                   Scheduled to open {new Date(opensAtMs).toLocaleString()}. Starting now opens it
