@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AccountMenu from "./AccountMenu";
 import Logo from "./Logo";
 import { useAccountSession } from "./useAccountSession";
@@ -35,8 +35,24 @@ export default function SiteHeader({
   const isActive = (href: string) => pathname === href;
   const loggedIn = mounted && !!session;
 
+  // Close the mobile menu when navigating to another page.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  // Close the mobile menu with the Escape key (only while it is open).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
-    <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/60 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/40">
+    <>
+      <header className="sticky top-0 z-30 border-b border-white/10 bg-zinc-950/60 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/40">
       <div className="relative z-40 mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-6 sm:py-4">
         {/* Logo */}
         <Link
@@ -114,18 +130,6 @@ export default function SiteHeader({
         </div>
       </div>
 
-      {/* Backdrop: tapping outside the menu closes it (mobile only). Sits below
-          the header (z-30) so the burger button stays tappable to toggle. */}
-      {open && (
-        <button
-          type="button"
-          aria-label="Close menu"
-          tabIndex={-1}
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-20 cursor-default md:hidden"
-        />
-      )}
-
       {/* Mobile menu panel */}
       {open && (
         <nav className="relative z-30 border-t border-white/10 bg-zinc-950/80 backdrop-blur md:hidden">
@@ -164,6 +168,24 @@ export default function SiteHeader({
           </div>
         </nav>
       )}
-    </header>
+      </header>
+
+      {/* Backdrop: tapping anywhere outside the menu closes it (mobile only).
+          It lives OUTSIDE <header> on purpose: the header has `backdrop-blur`,
+          and a `backdrop-filter` makes itself the containing block for `fixed`
+          descendants — so a backdrop nested in the header would only cover the
+          header's own box, not the whole screen. As a sibling it spans the full
+          viewport. z-20 keeps it below the header (z-30) so the burger button
+          and the menu panel stay tappable, and above page content (z-10). */}
+      {open && (
+        <button
+          type="button"
+          aria-label="Close menu"
+          tabIndex={-1}
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-20 cursor-default md:hidden"
+        />
+      )}
+    </>
   );
 }

@@ -8,7 +8,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccountService } from "@/services/accountService";
 import { AuctionEngine } from "@/services/auctionEngine";
 import { EventsService } from "@/services/eventsService";
@@ -58,6 +58,9 @@ export default function DashboardPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [seen, setSeen] = useState<Set<string>>(() => loadSeen());
+  // A transient banner for things that arrive live (a new auction/event, or an
+  // admin changing your roles). Auto-dismisses; see the effects below.
+  const [toast, setToast] = useState<{ id: string; title: string; detail: string } | null>(null);
 
   // Load the role-dependent data once we know the profile's roles.
   const loadRoleData = useCallback((p: Profile) => {
@@ -163,6 +166,91 @@ export default function DashboardPage() {
     };
   }, [liveEvent]);
 
+  // Realtime: keep the dashboard in sync without a page refresh.
+  //   * auction_events / auction_state -> a new auction goes live or the room
+  //     binds a different event;
+  //   * community_events              -> a new event/list appears or its
+  //     registration window opens/closes;
+  //   * profiles (this member's row)  -> an admin grants/changes their roles.
+  // Each handler just re-fetches the relevant slice; the derived notices, tab
+  // dots and sections update from that. (Requires the dashboard tables to be in
+  // the supabase_realtime publication — see the realtime_dashboard migration.)
+  useEffect(() => {
+    const profileId = profile?.id;
+    if (!profileId) return;
+
+    const reloadLiveEvent = () => {
+      EventsService.getLiveEvent().then((ev) => setLiveEvent(ev));
+    };
+    const reloadEvents = () => {
+      Promise.all([
+        CommunityEventsService.listEvents(),
+        CommunityEventsService.listMyRegisteredEventIds(),
+      ]).then(([all, mine]) => {
+        setEvents(all.filter((e) => e.kind === "event"));
+        setRegisteredIds(mine);
+      });
+    };
+
+    const channel = supabase
+      .channel("dashboard-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "auction_events" },
+        reloadLiveEvent
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "auction_state" },
+        reloadLiveEvent
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "community_events" },
+        reloadEvents
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${profileId}`,
+        },
+        (payload) => {
+          void refresh();
+          // Toast only when the role set actually changed (not e.g. a Blitz
+          // link/avatar update on the same row).
+          const norm = (raw: unknown) =>
+            (Array.isArray(raw) ? (raw as unknown[]) : [])
+              .map((r) => String(r).toLowerCase())
+              .sort()
+              .join(",");
+          const before = norm((payload.old as Record<string, unknown>)?.roles);
+          const after = norm((payload.new as Record<string, unknown>)?.roles);
+          if (before !== after) {
+            setToast({
+              id: `role:${Date.now()}`,
+              title: "Access updated",
+              detail: "An admin changed your roles.",
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, refresh]);
+
+  // Auto-dismiss the toast.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const roles = useMemo(() => profile?.roles ?? [], [profile]);
   const hasAdmin = roles.includes("admin");
   const hasBidder = roles.includes(BIDDER_ROLE);
@@ -219,6 +307,22 @@ export default function DashboardPage() {
   }, [hasBidder, hasStreamer, liveEvent, openEventsForMe]);
 
   const unseenNotices = notices.filter((n) => !seen.has(n.id));
+
+  // Toast when a notice arrives live (a new auction or open event). The first
+  // pass just records what's already there, so existing notices on load don't
+  // pop a toast — only genuinely new ones do.
+  const knownNoticeIds = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (knownNoticeIds.current === null) {
+      knownNoticeIds.current = new Set(notices.map((n) => n.id));
+      return;
+    }
+    const fresh = notices.find((n) => !knownNoticeIds.current!.has(n.id));
+    notices.forEach((n) => knownNoticeIds.current!.add(n.id));
+    if (fresh) {
+      setToast({ id: fresh.id, title: fresh.title, detail: fresh.detail });
+    }
+  }, [notices]);
 
   const markTabSeen = useCallback(
     (tab: string) => {
@@ -415,6 +519,35 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Live toast: fires when something arrives in realtime (a new auction or
+          open event, or an admin changing your roles). aria-live so screen
+          readers announce it. */}
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-sm animate-fade-up sm:inset-x-auto sm:right-4 sm:bottom-4"
+        >
+          <div className="flex items-start gap-3 rounded-2xl bg-zinc-900/95 p-4 ring-1 ring-emerald-400/30 shadow-[0_0_40px_rgba(16,185,129,0.15)] backdrop-blur">
+            <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-400 animate-glow-pulse" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-zinc-100">{toast.title}</p>
+              <p className="text-xs text-zinc-400">{toast.detail}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              aria-label="Dismiss"
+              className="shrink-0 rounded-lg p-1 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
