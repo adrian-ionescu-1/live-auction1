@@ -17,6 +17,7 @@
 import { useEffect } from "react";
 import { useAuctionStore } from "@/store/auctionStore";
 import PlayerCard from "@/components/auction/PlayerCard";
+import Flag from "@/components/community/Flag";
 
 const BRAND = "Full-Stack Developer · ThE_Adrian_One";
 
@@ -182,10 +183,12 @@ function Timer({
 
 function PricePanel({
   highestUser,
+  highestFlag,
   highestAmount,
   startingBid,
 }: {
   highestUser: string | null;
+  highestFlag: string | null;
   highestAmount: number | null;
   startingBid: number;
 }) {
@@ -203,6 +206,7 @@ function PricePanel({
       {hasBid ? (
         <div className="mt-3 flex items-center gap-2 rounded-2xl bg-emerald-500/10 px-3 py-2 ring-1 ring-emerald-400/20">
           <span className="text-xs uppercase tracking-wide text-emerald-200/80">Leading</span>
+          <Flag code={highestFlag} className="h-4 w-auto shrink-0" />
           <span className="truncate text-sm font-extrabold text-emerald-100">{highestUser}</span>
         </div>
       ) : (
@@ -214,8 +218,10 @@ function PricePanel({
 
 function BidFeed({
   bids,
+  users,
 }: {
   bids: { userId: string; username: string; amount: number; timestamp: number }[];
+  users: { id: string; username: string; flag?: string | null }[];
 }) {
   // Most recent first, capped so the feed stays readable on small screens.
   const recent = [...bids].slice(-7).reverse();
@@ -233,21 +239,29 @@ function BidFeed({
         </p>
       ) : (
         <ul className="space-y-1.5">
-          {recent.map((b, i) => (
-            <li
-              key={`${b.userId}-${b.timestamp}`}
-              className={`flex items-center justify-between rounded-xl px-3 py-2 ring-1 ${
-                i === 0
-                  ? "animate-fade-up bg-emerald-500/10 ring-emerald-400/20"
-                  : "bg-black/20 ring-white/5"
-              }`}
-            >
-              <span className="truncate text-sm text-zinc-200">{b.username}</span>
-              <span className="shrink-0 text-sm font-bold tabular-nums text-zinc-100">
-                ${b.amount.toLocaleString()}
-              </span>
-            </li>
-          ))}
+          {recent.map((b, i) => {
+            const u = users.find((x) => x.id === b.userId);
+            const name = u?.username ?? b.username;
+            const flag = u?.flag ?? null;
+            return (
+              <li
+                key={`${b.userId}-${b.timestamp}`}
+                className={`flex items-center justify-between rounded-xl px-3 py-2 ring-1 ${
+                  i === 0
+                    ? "animate-fade-up bg-emerald-500/10 ring-emerald-400/20"
+                    : "bg-black/20 ring-white/5"
+                }`}
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <Flag code={flag} className="h-3.5 w-auto shrink-0" />
+                  <span className="truncate text-sm text-zinc-200">{name}</span>
+                </span>
+                <span className="shrink-0 text-sm font-bold tabular-nums text-zinc-100">
+                  ${b.amount.toLocaleString()}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -323,11 +337,20 @@ export default function StreamRoom({ onExit }: { onExit: () => void }) {
     roundCurrentIndex,
     roundTotalPlayers,
     liveEvent,
+    users,
     initializeRealtime,
     cleanupRealtime,
   } = useAuctionStore();
 
   const eventName = liveEvent?.name ?? null;
+
+  // Leading bidder's current name + flag, resolved live so an admin rename / flag
+  // change shows on the broadcast immediately (fallback: the captured bid name).
+  const leader = currentHighestBid
+    ? users.find((u) => u.id === currentHighestBid.userId)
+    : undefined;
+  const leaderName = leader?.username ?? currentHighestBid?.username ?? null;
+  const leaderFlag = leader?.flag ?? null;
 
   // The opening bid shown on the card / price panel mirrors the live event's
   // chosen starting bid, falling back to the player's base price.
@@ -429,7 +452,8 @@ export default function StreamRoom({ onExit }: { onExit: () => void }) {
                   resultMessage={resultMessage}
                 />
                 <PricePanel
-                  highestUser={currentHighestBid?.username ?? null}
+                  highestUser={leaderName}
+                  highestFlag={leaderFlag}
                   highestAmount={currentHighestBid?.amount ?? null}
                   startingBid={startingBid}
                 />
@@ -437,7 +461,7 @@ export default function StreamRoom({ onExit }: { onExit: () => void }) {
 
               {/* Live bids — last on mobile, right column on desktop. */}
               <div className="order-3 flex flex-col gap-5 lg:order-3">
-                <BidFeed bids={bidHistory} />
+                <BidFeed bids={bidHistory} users={users} />
               </div>
             </div>
 

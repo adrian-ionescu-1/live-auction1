@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuctionStore } from '@/store/auctionStore';
+import Flag from '@/components/community/Flag';
 
 interface ResultsViewProps {
   onClose: () => void;
@@ -44,8 +45,9 @@ export default function ResultsView({ onClose }: ResultsViewProps) {
           {/* the current member's personal card */}
           {me ? (
             <div className="animate-fade-up rounded-3xl bg-white/5 p-6 ring-1 ring-white/10 shadow-[0_0_60px_rgba(16,185,129,0.12)]">
-              <h2 className="mb-4 text-center text-2xl font-extrabold text-zinc-100 truncate">
-                {me.username}
+              <h2 className="mb-4 flex items-center justify-center gap-2 text-center text-2xl font-extrabold text-zinc-100">
+                <Flag code={me.flag} className="h-5 w-auto shrink-0" />
+                <span className="truncate">{me.username}</span>
               </h2>
 
               <div className="grid grid-cols-3 gap-2 sm:gap-3">

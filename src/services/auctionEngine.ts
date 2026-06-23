@@ -89,6 +89,7 @@ export class AuctionEngine {
         wonPlayers: userWonPlayersMap[u.id] || [],
         banned: !!u.banned,
         profileId: u.profile_id ?? null,
+        flag: (u.flag as string) ?? null,
       }));
     } catch (error) {
       console.error('Error in loadUsers:', error);

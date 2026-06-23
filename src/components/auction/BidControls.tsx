@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuctionStore } from '@/store/auctionStore';
+import Flag from '@/components/community/Flag';
 import {
   DEFAULT_TARGET_PLAYERS,
   DEFAULT_RESERVE_PER_PLAYER,
@@ -24,6 +25,14 @@ export default function BidControls() {
   const [bidError, setBidError] = useState<string | null>(null);
 
   const currentUser = users.find((u) => u.id === currentUserId);
+
+  // Resolve the leading bidder's current name + flag live (admin renames / flags
+  // reflect immediately); fall back to the bid's captured name.
+  const leader = currentHighestBid
+    ? users.find((u) => u.id === currentHighestBid.userId)
+    : undefined;
+  const leaderName = leader?.username ?? currentHighestBid?.username ?? '';
+  const leaderFlag = leader?.flag ?? null;
 
   // ---- TARGET / RESERVE LOGIC (event-driven) ----
   const target = liveEvent?.playerLimit ?? DEFAULT_TARGET_PLAYERS;
@@ -135,8 +144,9 @@ export default function BidControls() {
             >
               ${currentHighestBid.amount.toLocaleString()}
             </p>
-            <p className="text-sm text-zinc-300">
-              by <span className="font-semibold text-zinc-100">{currentHighestBid.username}</span>
+            <p className="flex items-center gap-1.5 text-sm text-zinc-300">
+              by <Flag code={leaderFlag} className="h-3.5 w-auto" />
+              <span className="font-semibold text-zinc-100">{leaderName}</span>
             </p>
           </div>
         ) : (

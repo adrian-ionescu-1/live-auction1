@@ -14,6 +14,9 @@ export interface User {
   // Links the participant to the Discord member they were provisioned from.
   // Null only for legacy key-based rows (cleaned up by the events migration).
   profileId?: string | null;
+  // ISO country code for the bidder's flag (admin-set tag), or null for none.
+  // Shown next to their name across the live room (bids, winner, squad).
+  flag?: string | null;
 }
 
 export interface WonPlayer {
