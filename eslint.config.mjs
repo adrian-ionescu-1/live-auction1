@@ -1,13 +1,8 @@
-// Flat ESLint config (ESLint 9). Replaces the old `.eslintrc.json` + `next lint`,
-// which Next 15 deprecated and Next 16 removes. We bridge the Next shareable
-// config ("next/core-web-vitals") via FlatCompat to keep the exact same rules.
+// Flat ESLint config (ESLint 9 + Next 16). Next 16's eslint-config-next ships a
+// native flat-config array, so we spread it directly (no FlatCompat bridge).
 // Run with `npm run lint` (eslint .).
 
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const compat = new FlatCompat({ baseDirectory: dirname(fileURLToPath(import.meta.url)) });
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 
 const config = [
   {
@@ -24,7 +19,19 @@ const config = [
       "prettier.config.js",
     ],
   },
-  ...compat.extends("next/core-web-vitals"),
+  ...nextCoreWebVitals,
+  {
+    // Next 16 enables the React-Compiler-oriented react-hooks rules by default.
+    // They flag idiomatic patterns this codebase relies on (setState after an
+    // async fetch in an effect, Date.now() in a memo, small components defined
+    // inline). They are advisory, not bugs — turned off to keep the pre-upgrade
+    // lint baseline. Revisit if/when adopting the React Compiler.
+    rules: {
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/static-components": "off",
+    },
+  },
 ];
 
 export default config;
