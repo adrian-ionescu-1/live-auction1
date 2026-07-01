@@ -136,20 +136,30 @@ export class EventsService {
 
   /** The signed-in member's results across events (for their dashboard). */
   static async listMyResults(profileId: string): Promise<MyEventResults[]> {
-    const { data: userRow } = await supabase
+    // A profile can map to more than one participant row in public.users
+    // (users.profile_id is not unique — a member is provisioned when an event is
+    // created AND again when they enter the room / log in with a key). Match on
+    // ALL of them: using maybeSingle() here would error out on the duplicate and
+    // silently drop the member's results. See listEventResults for the admin view.
+    const { data: userRows, error: userError } = await supabase
       .from("users")
       .select("id")
-      .eq("profile_id", profileId)
-      .maybeSingle();
+      .eq("profile_id", profileId);
 
-    if (!userRow?.id) return [];
+    if (userError) {
+      console.error("Error resolving participant for results:", userError);
+      return [];
+    }
+
+    const userIds = (userRows ?? []).map((u) => (u as { id: string }).id);
+    if (userIds.length === 0) return [];
 
     const { data, error } = await supabase
       .from("auction_event_results")
       .select(
         "player_id, player_name, user_id, username, amount, via_random, won_at, event_id, auction_events ( name, status, finished_at )"
       )
-      .eq("user_id", userRow.id as string)
+      .in("user_id", userIds)
       .order("won_at", { ascending: true });
 
     if (error) {
