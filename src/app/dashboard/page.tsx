@@ -183,6 +183,13 @@ export default function DashboardPage() {
     const reloadLiveEvent = () => {
       EventsService.getLiveEvent().then((ev) => setLiveEvent(ev));
     };
+    // When the auction closes (auction_events flips to 'finished'), a bidder's
+    // personal results become available — refresh them so they show up without
+    // a manual page reload.
+    const reloadMyResults = () => {
+      if (!profile?.roles.includes(BIDDER_ROLE)) return;
+      EventsService.listMyResults(profileId).then((r) => setMyResults(r));
+    };
     const reloadEvents = () => {
       Promise.all([
         CommunityEventsService.listEvents(),
@@ -198,7 +205,10 @@ export default function DashboardPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "auction_events" },
-        reloadLiveEvent
+        () => {
+          reloadLiveEvent();
+          reloadMyResults();
+        }
       )
       .on(
         "postgres_changes",
@@ -243,7 +253,7 @@ export default function DashboardPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id, refresh]);
+  }, [profile?.id, profile?.roles, refresh]);
 
   // Auto-dismiss the toast.
   useEffect(() => {
