@@ -22,7 +22,7 @@ import { useMembersPresence } from "@/app/_components/useMembersPresence";
 import { AccountAvatar } from "@/app/_components/AccountMenu";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import UnsavedChangesGuard from "@/components/admin/UnsavedChangesGuard";
-import ImportListDialog, { ImportedRow } from "@/components/community/ImportListDialog";
+import ImportListDialog, { ImportedRow, ImportOptions } from "@/components/community/ImportListDialog";
 import { randomVariantId } from "@/components/auction/cardDesigns";
 import { randomCountryCode } from "@/lib/flags";
 
@@ -309,8 +309,11 @@ export default function CreateEventPage() {
   const [lists, setLists] = useState<CommunityEvent[]>([]);
   const [selectedListId, setSelectedListId] = useState("");
   // Order players come up for auction from the chosen list: "list" keeps the
-  // list's own order; "shuffle" randomizes it so a re-run isn't identical.
-  const [listOrder, setListOrder] = useState<"list" | "shuffle">("list");
+  // list's own order; "shuffle" randomizes it; "sort" orders by a custom field.
+  const [listOrder, setListOrder] = useState<"list" | "shuffle" | "sort">("list");
+  // When sorting: which custom field to sort by and the direction.
+  const [sortField, setSortField] = useState("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [listPreview, setListPreview] = useState<CommunityRegistration[]>([]);
   const [listLoading, setListLoading] = useState(false);
   // Import a brand-new list (CSV/Excel, optionally Wargaming-validated) right
@@ -359,7 +362,7 @@ export default function CreateEventPage() {
   // Import a CSV/Excel file into a new standalone list and select it as the
   // player source. Reuses the shared import dialog (file data or Wargaming
   // validation), the participant-list RPCs and the same dedupe + random card.
-  const handleImportToAuction = async (rows: ImportedRow[]) => {
+  const handleImportToAuction = async (rows: ImportedRow[], options: ImportOptions) => {
     setImportBusy(true);
     setImportNote(null);
     // Include the time so re-importing never collides with an earlier list name.
@@ -393,10 +396,11 @@ export default function CreateEventPage() {
       const res = await CommunityEventsService.addRegistration(
         listId,
         r.displayName,
-        r.values,
+        {},
         blitz,
         null,
-        { variant: randomVariantId(), flag: randomCountryCode() }
+        { variant: randomVariantId(), flag: options.assignRandomFlag ? randomCountryCode() : null },
+        r.customFields
       );
       if (res.success) ok += 1;
       else skipped += 1;
@@ -416,6 +420,8 @@ export default function CreateEventPage() {
 
   // Load the chosen list's participants for preview (and to confirm the count).
   useEffect(() => {
+    // A different list has different custom fields — reset the sort choice.
+    setSortField("");
     if (!selectedListId) {
       setListPreview([]);
       return;
@@ -431,6 +437,23 @@ export default function CreateEventPage() {
       active = false;
     };
   }, [selectedListId]);
+
+  // Custom-field labels available to sort by, taken from the loaded list preview
+  // (union, in first-seen order). Empty when the list has no custom fields.
+  const sortFieldOptions = (() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const reg of listPreview) {
+      for (const f of reg.customFields) {
+        const label = f.label.trim();
+        if (label && !seen.has(label.toLowerCase())) {
+          seen.add(label.toLowerCase());
+          out.push(label);
+        }
+      }
+    }
+    return out;
+  })();
 
   // Derived reserve math, mirrored from the server (admin_create_event):
   // the cheapest a member can secure a player is opening + smallest button, so
@@ -479,6 +502,7 @@ export default function CreateEventPage() {
     (name.trim() !== "" ||
       selectedListId !== "" ||
       listOrder !== "list" ||
+      sortField !== "" ||
       excludedIds.size > 0 ||
       budgetTouched ||
       playerLimit !== "8" ||
@@ -521,10 +545,15 @@ export default function CreateEventPage() {
 
     // If a registration list was chosen, replace the player pool with it.
     if (selectedListId) {
+      const sort =
+        listOrder === "sort" && sortField
+          ? { field: sortField, dir: sortDir }
+          : null;
       const pool = await CommunityEventsService.replacePlayersFromList(
         selectedListId,
         openingNum,
-        listOrder === "shuffle"
+        listOrder === "shuffle",
+        sort
       );
       if (!pool.success) {
         setError(
@@ -891,41 +920,101 @@ export default function CreateEventPage() {
               </p>
             )}
 
-            {/* Player order: keep the list's own order, or shuffle so the same
-                list doesn't come down the belt in the same sequence twice. */}
+            {/* Player order: keep the list's own order, shuffle it, or sort by a
+                custom field ascending / descending. */}
             {selectedListId && (
               <div className="mt-3">
                 <span className="block text-xs font-semibold text-zinc-400">Player order</span>
-                <div className="mt-1.5 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setListOrder("list")}
-                    aria-pressed={listOrder === "list"}
-                    className={`rounded-xl px-3 py-2 text-xs font-bold ring-1 transition ${
-                      listOrder === "list"
-                        ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
-                        : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    List order
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setListOrder("shuffle")}
-                    aria-pressed={listOrder === "shuffle"}
-                    className={`rounded-xl px-3 py-2 text-xs font-bold ring-1 transition ${
-                      listOrder === "shuffle"
-                        ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
-                        : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
-                    }`}
-                  >
-                    🔀 Shuffle
-                  </button>
+                <div className="mt-1.5 grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      { key: "list", label: "List order" },
+                      { key: "shuffle", label: "🔀 Shuffle" },
+                      { key: "sort", label: "↕ Sort" },
+                    ] as const
+                  ).map((opt) => {
+                    const active = listOrder === opt.key;
+                    const disabled = opt.key === "sort" && sortFieldOptions.length === 0;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          setListOrder(opt.key);
+                          if (opt.key === "sort" && !sortField && sortFieldOptions.length > 0) {
+                            setSortField(sortFieldOptions[0]);
+                          }
+                        }}
+                        aria-pressed={active}
+                        title={
+                          disabled ? "This list has no custom fields to sort by." : undefined
+                        }
+                        className={`rounded-xl px-2 py-2 text-xs font-bold ring-1 transition ${
+                          active
+                            ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                            : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {listOrder === "sort" && (
+                  <div className="mt-2 grid grid-cols-1 gap-2 xs:grid-cols-2">
+                    <select
+                      value={sortField}
+                      onChange={(e) => setSortField(e.target.value)}
+                      aria-label="Sort by field"
+                      className="w-full min-w-0 rounded-xl bg-zinc-900 px-3 py-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                    >
+                      {sortFieldOptions.map((label) => (
+                        <option key={label} value={label} className="bg-zinc-900 text-zinc-100">
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSortDir("desc")}
+                        aria-pressed={sortDir === "desc"}
+                        className={`rounded-xl px-2 py-2 text-xs font-bold ring-1 transition ${
+                          sortDir === "desc"
+                            ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                            : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                        }`}
+                      >
+                        ↓ High→low
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSortDir("asc")}
+                        aria-pressed={sortDir === "asc"}
+                        className={`rounded-xl px-2 py-2 text-xs font-bold ring-1 transition ${
+                          sortDir === "asc"
+                            ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/30"
+                            : "bg-white/5 text-zinc-300 ring-white/10 hover:bg-white/10"
+                        }`}
+                      >
+                        ↑ Low→high
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <p className="mt-1.5 text-[11px] text-zinc-500">
                   {listOrder === "shuffle"
                     ? "Players come up in a random order, different every time."
-                    : "Players come up in the list's own order (as previewed below)."}
+                    : listOrder === "sort"
+                      ? sortField
+                        ? `Players are ordered by "${sortField}" (${
+                            sortDir === "desc" ? "highest first" : "lowest first"
+                          }), by number.`
+                        : "Pick a field to sort by."
+                      : "Players come up in the list's own order (as previewed below)."}
                 </p>
               </div>
             )}
@@ -1006,7 +1095,11 @@ export default function CreateEventPage() {
         }${
           selectedListId
             ? ` Player pool: ${listPreview.length} from the selected registration list (${
-                listOrder === "shuffle" ? "shuffled order" : "list order"
+                listOrder === "shuffle"
+                  ? "shuffled order"
+                  : listOrder === "sort" && sortField
+                    ? `sorted by ${sortField} ${sortDir === "desc" ? "↓" : "↑"}`
+                    : "list order"
               }).`
             : ""
         } This becomes the live event.`}

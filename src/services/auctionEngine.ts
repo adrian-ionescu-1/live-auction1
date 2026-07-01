@@ -24,6 +24,14 @@ export class AuctionEngine {
         basePrice: Number(p.base_price) || 100,
         variant: (p.card_variant as string) ?? null,
         flag: (p.flag as string) ?? null,
+        customFields: Array.isArray(p.custom_fields)
+          ? p.custom_fields
+              .map((f: any) => ({
+                label: f?.label == null ? '' : String(f.label).trim(),
+                value: f?.value == null ? '' : String(f.value),
+              }))
+              .filter((f: { label: string }) => f.label !== '')
+          : [],
       }));
     } catch (error) {
       console.error('Error in loadPlayers:', error);

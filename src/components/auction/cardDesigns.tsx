@@ -22,6 +22,11 @@ export interface CardDesignProps {
   /** Opening bid to show, or null to hide the price row (e.g. in previews). */
   startingBid: number | null;
   hasStats: boolean;
+  /**
+   * Free-form fields from a manual import (label + value), shown in the detail
+   * grid when the player has no validated WG stats. Ordered by the admin.
+   */
+  customFields?: { label: string; value: string }[];
 }
 
 // ── Shared primitives ────────────────────────────────────────────────────────
@@ -39,15 +44,25 @@ function FlagChip({ flag, className = "h-5 w-auto" }: { flag: string | null; cla
 
 type StatItem = { label: string; value: string };
 
-function statItems(p: CardDesignProps): StatItem[] {
-  return [
-    { label: "Battles", value: fmtNum(p.battles) },
-    { label: "Win %", value: fmtWinrate(p.winrate) },
-    { label: "Avg dmg", value: fmtNum(p.avgDamage) },
-  ];
+// The detail cells a card shows: validated WG stats when present, otherwise the
+// player's manual custom fields (label + value, in the admin's order). Empty
+// when the player has neither, so the design hides the grid entirely.
+function detailItems(p: CardDesignProps): StatItem[] {
+  if (p.hasStats) {
+    return [
+      { label: "Battles", value: fmtNum(p.battles) },
+      { label: "Win %", value: fmtWinrate(p.winrate) },
+      { label: "Avg dmg", value: fmtNum(p.avgDamage) },
+    ];
+  }
+  return (p.customFields ?? [])
+    .filter((f) => f.label.trim() !== "")
+    .map((f) => ({ label: f.label.trim(), value: f.value.trim() || "—" }));
 }
 
-// A reusable 3-up stat grid; designs pass their own surface/value styling.
+// A reusable detail grid; designs pass their own surface/value styling. Columns
+// adapt so 3 stats keep the classic 3-up look while longer custom-field lists
+// stay readable down to 320px (2 columns on the smallest screens).
 function StatGrid({
   items,
   cellClass,
@@ -59,12 +74,17 @@ function StatGrid({
   labelClass: string;
   valueClass: string;
 }) {
+  const cols = items.length <= 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3";
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
-      {items.map((s) => (
-        <div key={s.label} className={cellClass}>
-          <p className={labelClass}>{s.label}</p>
-          <p className={`tabular-nums ${valueClass}`}>{s.value}</p>
+    <div className={`grid ${cols} gap-2 sm:gap-2.5`}>
+      {items.map((s, i) => (
+        <div key={`${s.label}-${i}`} className={`min-w-0 ${cellClass}`}>
+          <p className={`truncate ${labelClass}`} title={s.label}>
+            {s.label}
+          </p>
+          <p className={`truncate tabular-nums ${valueClass}`} title={s.value}>
+            {s.value}
+          </p>
         </div>
       ))}
     </div>
@@ -209,10 +229,10 @@ function DesertOps(p: CardDesignProps) {
       </div>
       <div className="bg-black/40 p-5 backdrop-blur-sm">
         <NameRow name={p.name} flag={p.flag} nameClass="text-2xl font-extrabold text-amber-50" />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-amber-500/10 p-2.5 text-center ring-1 ring-amber-400/20"
               labelClass="text-[10px] uppercase tracking-wide text-amber-200/70"
               valueClass="text-lg font-extrabold text-amber-100"
@@ -253,10 +273,10 @@ function WinterCamo(p: CardDesignProps) {
       </div>
       <div className="bg-slate-950/60 p-5 backdrop-blur-sm">
         <NameRow name={p.name} flag={p.flag} nameClass="text-2xl font-extrabold text-slate-50" />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-white/5 p-2.5 text-center ring-1 ring-cyan-300/15"
               labelClass="text-[10px] uppercase tracking-wide text-slate-400"
               valueClass="text-lg font-extrabold text-cyan-100"
@@ -296,10 +316,10 @@ function UrbanHex(p: CardDesignProps) {
       </div>
       <div className="bg-black/50 p-5 backdrop-blur-sm">
         <NameRow name={p.name} flag={p.flag} nameClass="text-2xl font-extrabold text-zinc-50" />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-emerald-500/10 p-2.5 text-center ring-1 ring-emerald-400/20"
               labelClass="text-[10px] uppercase tracking-wide text-emerald-200/70"
               valueClass="text-lg font-extrabold text-emerald-100"
@@ -332,10 +352,10 @@ function ForestRecon(p: CardDesignProps) {
       </div>
       <div className="bg-black/45 p-5 backdrop-blur-sm">
         <NameRow name={p.name} flag={p.flag} nameClass="text-2xl font-extrabold text-lime-50" />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-lime-500/10 p-2.5 text-center ring-1 ring-lime-400/20"
               labelClass="text-[10px] uppercase tracking-wide text-lime-200/70"
               valueClass="text-lg font-extrabold text-lime-100"
@@ -373,10 +393,10 @@ function SteelCommander(p: CardDesignProps) {
       </div>
       <div className="bg-zinc-950/70 p-5 backdrop-blur-sm">
         <NameRow name={p.name} flag={p.flag} nameClass="text-2xl font-extrabold text-zinc-50" />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-white/5 p-2.5 text-center ring-1 ring-white/10"
               labelClass="text-[10px] uppercase tracking-wide text-zinc-500"
               valueClass="text-lg font-extrabold text-zinc-100"
@@ -420,10 +440,10 @@ function NeonGrid(p: CardDesignProps) {
           flag={p.flag}
           nameClass="bg-gradient-to-r from-violet-200 via-fuchsia-200 to-cyan-200 bg-clip-text text-2xl font-extrabold text-transparent"
         />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-violet-500/10 p-2.5 text-center ring-1 ring-violet-400/25"
               labelClass="text-[10px] uppercase tracking-wide text-violet-200/70"
               valueClass="text-lg font-extrabold text-violet-100"
@@ -459,10 +479,10 @@ function GoldElite(p: CardDesignProps) {
           flag={p.flag}
           nameClass="bg-gradient-to-r from-yellow-100 via-amber-200 to-yellow-300 bg-clip-text text-2xl font-extrabold text-transparent"
         />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-yellow-500/10 p-2.5 text-center ring-1 ring-yellow-400/25"
               labelClass="text-[10px] uppercase tracking-wide text-yellow-200/70"
               valueClass="text-lg font-extrabold text-yellow-100"
@@ -494,10 +514,10 @@ function HoloPrism(p: CardDesignProps) {
       </div>
       <div className="bg-black/60 p-5 backdrop-blur-sm">
         <NameRow name={p.name} flag={p.flag} nameClass="text-2xl font-extrabold text-white" />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-white/10 p-2.5 text-center ring-1 ring-white/15"
               labelClass="text-[10px] uppercase tracking-wide text-white/60"
               valueClass="text-lg font-extrabold text-white"
@@ -528,10 +548,10 @@ function MinimalGlass(p: CardDesignProps) {
       </div>
       <div className="border-t border-white/10 p-5">
         <NameRow name={p.name} flag={p.flag} nameClass="text-2xl font-bold tracking-tight text-zinc-50" />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-white/[0.04] p-2.5 text-center ring-1 ring-white/10"
               labelClass="text-[10px] uppercase tracking-wide text-zinc-500"
               valueClass="text-lg font-bold text-zinc-100"
@@ -567,10 +587,10 @@ function CrimsonAurora(p: CardDesignProps) {
           flag={p.flag}
           nameClass="bg-gradient-to-r from-red-200 via-rose-200 to-orange-200 bg-clip-text text-2xl font-extrabold text-transparent"
         />
-        {p.hasStats && (
+        {detailItems(p).length > 0 && (
           <div className="mt-4">
             <StatGrid
-              items={statItems(p)}
+              items={detailItems(p)}
               cellClass="rounded-xl bg-red-500/10 p-2.5 text-center ring-1 ring-red-400/25"
               labelClass="text-[10px] uppercase tracking-wide text-red-200/70"
               valueClass="text-lg font-extrabold text-red-100"

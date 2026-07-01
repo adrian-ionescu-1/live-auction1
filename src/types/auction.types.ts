@@ -38,6 +38,17 @@ export interface Player {
   variant?: string | null;
   /** ISO country code for the card's flag, or null for none. */
   flag?: string | null;
+  /**
+   * Free-form fields taken verbatim from a manually-imported list (label + value,
+   * in the admin's column order). Shown on the card in place of the WG stat grid.
+   */
+  customFields?: CustomField[];
+}
+
+/** One admin-defined column from a manual import: a title and its cell value. */
+export interface CustomField {
+  label: string;
+  value: string;
 }
 
 export interface Bid {

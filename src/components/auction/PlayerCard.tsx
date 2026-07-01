@@ -37,6 +37,7 @@ export default function PlayerCard({ player, startingBid, variant, flag }: Playe
       avgDamage={hasStats ? player.avg_damage : null}
       startingBid={opening ?? null}
       hasStats={hasStats}
+      customFields={player.customFields ?? []}
     />
   );
 }
