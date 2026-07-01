@@ -68,6 +68,17 @@ function mapRegistration(row: Record<string, unknown>): CommunityRegistration {
       values[k] = v == null ? "" : String(v);
     }
   }
+  const cfRaw = row.custom_fields;
+  const customFields: { label: string; value: string }[] = [];
+  if (Array.isArray(cfRaw)) {
+    for (const item of cfRaw) {
+      if (item && typeof item === "object") {
+        const o = item as Record<string, unknown>;
+        const label = o.label == null ? "" : String(o.label).trim();
+        if (label) customFields.push({ label, value: o.value == null ? "" : String(o.value) });
+      }
+    }
+  }
   const statsRaw = row.blitz_stats;
   let blitzStats: BlitzStats | null = null;
   if (statsRaw && typeof statsRaw === "object") {
@@ -90,6 +101,7 @@ function mapRegistration(row: Record<string, unknown>): CommunityRegistration {
     blitzStats,
     cardVariant: (row.card_variant as string) ?? null,
     flag: (row.flag as string) ?? null,
+    customFields,
     createdAt: (row.created_at as string) ?? new Date().toISOString(),
     updatedAt: (row.updated_at as string) ?? new Date().toISOString(),
     profileUsername: (row.profile_username as string) ?? null,
@@ -346,7 +358,8 @@ export class CommunityEventsService {
     values: Record<string, string>,
     blitz?: { accountId?: number | null; playerName: string; stats: BlitzStats } | null,
     profileId: string | null = null,
-    card?: { variant?: string | null; flag?: string | null }
+    card?: { variant?: string | null; flag?: string | null },
+    customFields?: { label: string; value: string }[]
   ): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("admin_add_community_registration", {
       p_event_id: eventId,
@@ -358,6 +371,7 @@ export class CommunityEventsService {
       p_profile_id: profileId,
       p_card_variant: card?.variant ?? null,
       p_flag: card?.flag ?? null,
+      p_custom_fields: customFields ?? [],
       p_admin_key: adminKey(),
     });
     return unwrap(data, error);
@@ -368,7 +382,8 @@ export class CommunityEventsService {
     displayName: string,
     values: Record<string, string>,
     blitz?: { accountId: number; playerName: string; stats: BlitzStats } | null,
-    card?: { variant?: string | null; flag?: string | null }
+    card?: { variant?: string | null; flag?: string | null },
+    customFields?: { label: string; value: string }[]
   ): Promise<RpcResult> {
     const { data, error } = await supabase.rpc("admin_update_community_registration", {
       p_registration_id: registrationId,
@@ -379,6 +394,7 @@ export class CommunityEventsService {
       p_blitz_stats: blitz?.stats ?? null,
       p_card_variant: card?.variant ?? null,
       p_flag: card?.flag ?? null,
+      p_custom_fields: customFields ?? null,
       p_admin_key: adminKey(),
     });
     return unwrap(data, error);
@@ -408,12 +424,15 @@ export class CommunityEventsService {
   static async replacePlayersFromList(
     listEventId: string,
     basePrice: number,
-    shuffle = false
+    shuffle = false,
+    sort?: { field: string; dir: "asc" | "desc" } | null
   ): Promise<{ success: boolean; count: number; error: string | null }> {
     const { data, error } = await supabase.rpc("admin_replace_players_from_list", {
       p_list_event_id: listEventId,
       p_base_price: basePrice,
       p_shuffle: shuffle,
+      p_sort_field: sort?.field ?? null,
+      p_sort_dir: sort?.dir ?? "asc",
       p_admin_key: adminKey(),
     });
     if (error) return { success: false, count: 0, error: error.message };

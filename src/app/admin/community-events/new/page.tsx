@@ -22,7 +22,7 @@ import {
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import UnsavedChangesGuard from "@/components/admin/UnsavedChangesGuard";
 import CreateWbTournamentForm from "@/components/tournaments/wb/CreateWbTournamentForm";
-import ImportListDialog, { ImportedRow } from "@/components/community/ImportListDialog";
+import ImportListDialog, { ImportedRow, ImportOptions } from "@/components/community/ImportListDialog";
 import { randomVariantId } from "@/components/auction/cardDesigns";
 import { randomCountryCode } from "@/lib/flags";
 
@@ -314,6 +314,8 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
   // memory (the event has no id yet) and written once the event is created.
   const [importing, setImporting] = useState(false);
   const [importedRows, setImportedRows] = useState<ImportedRow[]>([]);
+  // Whether the staged import asked for a random flag per card (opt-in).
+  const [importAssignFlag, setImportAssignFlag] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -370,7 +372,7 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
 
   // Stage an imported list (deduped by name). Written to the event after it is
   // created. Validated rows keep their real Wargaming account + stats.
-  const handleImportStage = (rows: ImportedRow[]) => {
+  const handleImportStage = (rows: ImportedRow[], options: ImportOptions) => {
     const seen = new Set<string>();
     const deduped: ImportedRow[] = [];
     for (const r of rows) {
@@ -380,6 +382,7 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
       deduped.push(r);
     }
     setImportedRows(deduped);
+    setImportAssignFlag(options.assignRandomFlag);
     setImporting(false);
   };
 
@@ -422,10 +425,14 @@ function CommunityEventForm({ onBack }: { onBack: () => void }) {
         const added = await CommunityEventsService.addRegistration(
           res.eventId,
           r.displayName,
-          r.values,
+          {},
           blitz,
           null,
-          { variant: randomVariantId(), flag: randomCountryCode() }
+          {
+            variant: randomVariantId(),
+            flag: importAssignFlag ? randomCountryCode() : null,
+          },
+          r.customFields
         );
         if (!added.success) skipped += 1;
       }

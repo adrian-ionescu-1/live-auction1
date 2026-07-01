@@ -280,6 +280,14 @@ export const useAuctionStore = create<AuctionStoreState>((set, get) => ({
                   basePrice: Number(data.base_price) || 100,
                   variant: (data.card_variant as string) ?? null,
                   flag: (data.flag as string) ?? null,
+                  customFields: Array.isArray(data.custom_fields)
+                    ? (data.custom_fields as { label?: unknown; value?: unknown }[])
+                        .map((f) => ({
+                          label: f?.label == null ? '' : String(f.label).trim(),
+                          value: f?.value == null ? '' : String(f.value),
+                        }))
+                        .filter((f) => f.label !== '')
+                    : [],
                 };
               }
             }

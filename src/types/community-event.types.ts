@@ -82,6 +82,11 @@ export interface CommunityRegistration {
   cardVariant: string | null;
   /** Chosen country flag (ISO alpha-2 code), or null for none. */
   flag: string | null;
+  /**
+   * Free-form fields from a manual CSV/Excel import (label + value, in column
+   * order). Empty for self / Wargaming-validated registrations.
+   */
+  customFields: { label: string; value: string }[];
   createdAt: string;
   updatedAt: string;
   /** Profile of a self-registrant ("where they come from"). Null for manual rows. */

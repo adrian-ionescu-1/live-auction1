@@ -16,7 +16,7 @@ import {
 import { roleMeta } from "@/components/admin/roleMeta";
 import { categoryHashtag } from "@/components/admin/communityEventMeta";
 import RegistrationFormDialog from "@/components/community/RegistrationFormDialog";
-import ImportListDialog, { ImportedRow } from "@/components/community/ImportListDialog";
+import ImportListDialog, { ImportedRow, ImportOptions } from "@/components/community/ImportListDialog";
 import { ValidatedPlayer } from "@/components/community/BlitzValidator";
 import { getCardVariant, randomVariantId } from "@/components/auction/cardDesigns";
 import { randomCountryCode } from "@/lib/flags";
@@ -212,7 +212,7 @@ export default function CommunityParticipantsPage() {
     }
   };
 
-  const handleImport = async (importRows: ImportedRow[]) => {
+  const handleImport = async (importRows: ImportedRow[], options: ImportOptions) => {
     if (!importingTo) return;
     setBusy(true);
     setError(null);
@@ -231,9 +231,9 @@ export default function CommunityParticipantsPage() {
         continue;
       }
       seen.add(key);
-      // Validated rows carry the real Wargaming account; file-data rows keep
-      // whatever stats the file had. Imported rows have no card art, so assign
-      // each a random card design and a random country flag.
+      // Validated rows carry the real Wargaming account; file-data rows carry the
+      // admin's custom fields instead. Imported rows have no card art, so assign
+      // each a random card design; the flag is random only when the admin opted in.
       const blitz =
         r.validated && r.accountId != null
           ? { accountId: r.accountId, playerName: r.displayName, stats: r.stats! }
@@ -243,10 +243,11 @@ export default function CommunityParticipantsPage() {
       const res = await CommunityEventsService.addRegistration(
         id,
         r.displayName,
-        r.values,
+        {},
         blitz,
         null,
-        { variant: randomVariantId(), flag: randomCountryCode() }
+        { variant: randomVariantId(), flag: options.assignRandomFlag ? randomCountryCode() : null },
+        r.customFields
       );
       if (res.success) ok += 1;
       else skipped += 1;
@@ -515,6 +516,24 @@ export default function CommunityParticipantsPage() {
                                     <dt className="text-zinc-500">{f.label}</dt>
                                     <dd className="truncate font-semibold text-zinc-200">
                                       {reg.values[f.key]?.trim() || "—"}
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            )}
+
+                            {reg.customFields.length > 0 && (
+                              <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 xs:grid-cols-2">
+                                {reg.customFields.map((f, i) => (
+                                  <div key={`${f.label}-${i}`} className="min-w-0 text-xs">
+                                    <dt className="truncate text-zinc-500" title={f.label}>
+                                      {f.label}
+                                    </dt>
+                                    <dd
+                                      className="truncate font-semibold text-zinc-200"
+                                      title={f.value}
+                                    >
+                                      {f.value.trim() || "—"}
                                     </dd>
                                   </div>
                                 ))}

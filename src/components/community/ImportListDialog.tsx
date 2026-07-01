@@ -1,9 +1,12 @@
 // Import a participant list from a CSV or Excel file. Two modes:
 //
-//   * "file"     — take the data straight from the file: map each column to a
-//                  card field (name + optional battles / win rate / avg damage)
-//                  and any extra detail columns. One participant per row. Cards
-//                  get a random design + flag later (the file carries no art).
+//   * "file"     — take the data straight from the file. Only the Player (name)
+//                  column is fixed; every other column is a free-form custom
+//                  field the admin titles and maps by hand (e.g. Battles, WR, or
+//                  anything they want). One participant per row. Values are taken
+//                  verbatim — no Wargaming validation. Each card gets a random
+//                  design; a flag is assigned at random only if the admin ticks
+//                  the option.
 //
 //   * "validate" — the file holds only a column of in-game names. The admin
 //                  picks a Wargaming region and every name is validated against
@@ -23,14 +26,29 @@ import { BlitzClient } from "@/services/blitzClient";
 export interface ImportedRow {
   displayName: string;
   stats: BlitzStats | null;
-  values: Record<string, string>;
+  /** Free-form fields taken from the file (file mode), in the admin's order. */
+  customFields: { label: string; value: string }[];
   /** Set when the row was validated on Wargaming (carries the real account). */
   accountId?: number | null;
   validated?: boolean;
 }
 
+/** Options that apply to the whole import (not per-row). */
+export interface ImportOptions {
+  /** Give every imported card a random country flag. Off by default. */
+  assignRandomFlag: boolean;
+}
+
 type ExtraField = { id: number; label: string; col: string };
 type Mode = "file" | "validate";
+
+// Quick presets for the common WoT columns — one tap adds an editable custom
+// field. The keys drive the best-effort column auto-match.
+const FIELD_PRESETS: { label: string; keys: string[] }[] = [
+  { label: "Battles", keys: ["battle"] },
+  { label: "Win rate %", keys: ["win"] },
+  { label: "Avg damage", keys: ["dmg", "damage"] },
+];
 type ValidateResult = {
   found: ImportedRow[];
   /** Names with no Wargaming match — skipped on import. */
@@ -48,11 +66,6 @@ const REGIONS: { value: BlitzRegion; label: string }[] = [
   { value: "na", label: "NA" },
   { value: "asia", label: "ASIA" },
 ];
-
-function parseNumber(v: string): number {
-  const n = Number(String(v).replace(/[%,\s]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
 
 // Scrollable preview of the rows that will actually be imported (name + stats
 // when available). Numbered so the admin can eyeball the count.
@@ -73,11 +86,19 @@ function PreviewRows({ rows }: { rows: ImportedRow[] }) {
           {r.validated && (
             <span className="shrink-0 text-[10px] font-bold text-emerald-300">✓</span>
           )}
-          {r.stats && (
+          {r.stats ? (
             <span className="shrink-0 text-[10px] tabular-nums text-zinc-500">
               {r.stats.battles.toLocaleString()} · {r.stats.winrate.toFixed(1)}% ·{" "}
               {r.stats.avgDamage.toLocaleString()}
             </span>
+          ) : (
+            r.customFields.length > 0 && (
+              <span className="max-w-[45%] shrink-0 truncate text-[10px] text-zinc-500">
+                {r.customFields
+                  .map((f) => `${f.label}: ${f.value || "—"}`)
+                  .join(" · ")}
+              </span>
+            )
           )}
         </li>
       ))}
@@ -116,7 +137,7 @@ export default function ImportListDialog({
   isOpen: boolean;
   eventTitle: string;
   busy: boolean;
-  onImport: (rows: ImportedRow[]) => void;
+  onImport: (rows: ImportedRow[], options: ImportOptions) => void;
   onCancel: () => void;
   /** When set, the validation region is fixed to this (e.g. the list's region). */
   region?: BlitzRegion | null;
@@ -126,10 +147,11 @@ export default function ImportListDialog({
   const [hasHeader, setHasHeader] = useState(true);
   const [fileName, setFileName] = useState("");
   const [nameCol, setNameCol] = useState(NONE);
-  const [battlesCol, setBattlesCol] = useState(NONE);
-  const [winrateCol, setWinrateCol] = useState(NONE);
-  const [dmgCol, setDmgCol] = useState(NONE);
+  // Every non-name column is a free-form custom field (title + source column).
   const [extras, setExtras] = useState<ExtraField[]>([]);
+  const [nextExtraId, setNextExtraId] = useState(1);
+  // Off by default: a flag is only assigned at random when the admin ticks this.
+  const [assignFlag, setAssignFlag] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Validate-mode state.
@@ -148,10 +170,9 @@ export default function ImportListDialog({
     setHasHeader(true);
     setFileName("");
     setNameCol(NONE);
-    setBattlesCol(NONE);
-    setWinrateCol(NONE);
-    setDmgCol(NONE);
     setExtras([]);
+    setNextExtraId(1);
+    setAssignFlag(false);
     setError(null);
     setValidateRegion(region ?? "");
     setValidating(false);
@@ -189,9 +210,15 @@ export default function ImportListDialog({
         return i >= 0 ? String(i) : NONE;
       };
       setNameCol(find("name", "nick", "player") || "0");
-      setBattlesCol(find("battle"));
-      setWinrateCol(find("win"));
-      setDmgCol(find("dmg", "damage"));
+      // Pre-fill custom fields for any of the common WoT columns we recognize, so
+      // the admin starts from a sensible mapping but can rename / remap / remove.
+      let id = 1;
+      const detected = FIELD_PRESETS.map((preset) => {
+        const col = find(...preset.keys);
+        return col === NONE ? null : { id: id++, label: preset.label, col };
+      }).filter((e): e is ExtraField => e !== null);
+      setExtras(detected);
+      setNextExtraId(id);
     } catch {
       setError("Could not read that file. Use a .csv, .xlsx or .xls file.");
     }
@@ -220,25 +247,21 @@ export default function ImportListDialog({
   const cell = (row: string[], col: string) =>
     col === NONE ? "" : (row[Number(col)] ?? "").trim();
 
+  // Custom fields ready to map (a title + a chosen source column).
+  const activeExtras = extras.filter((e) => e.col !== NONE && e.label.trim() !== "");
+
   // --- File mode --------------------------------------------------------------
   const buildRows = (): ImportedRow[] =>
     dataRows
       .map((row) => {
         const displayName = cell(row, nameCol);
         if (!displayName) return null;
-        const hasStats = battlesCol !== NONE || winrateCol !== NONE || dmgCol !== NONE;
-        const stats: BlitzStats | null = hasStats
-          ? {
-              battles: parseNumber(cell(row, battlesCol)),
-              winrate: parseNumber(cell(row, winrateCol)),
-              avgDamage: parseNumber(cell(row, dmgCol)),
-            }
-          : null;
-        const values: Record<string, string> = {};
-        for (const e of extras) {
-          if (e.col !== NONE && e.label.trim()) values[e.label.trim()] = cell(row, e.col);
-        }
-        return { displayName, stats, values };
+        const customFields = activeExtras.map((e) => ({
+          label: e.label.trim(),
+          value: cell(row, e.col),
+        }));
+        // File mode has no validated WG stats — everything is a custom field.
+        return { displayName, stats: null, customFields } as ImportedRow;
       })
       .filter((r): r is ImportedRow => r !== null);
 
@@ -313,7 +336,7 @@ export default function ImportListDialog({
                   winrate: pl.player.winrate,
                   avgDamage: pl.player.avgDamage,
                 },
-                values: {},
+                customFields: [],
               });
             }
             return;
@@ -379,7 +402,9 @@ export default function ImportListDialog({
       : !validating && (validateResult?.found.length ?? 0) > 0);
 
   const importRows = () =>
-    onImport(mode === "file" ? filePreview : validateResult?.found ?? []);
+    onImport(mode === "file" ? filePreview : validateResult?.found ?? [], {
+      assignRandomFlag: assignFlag,
+    });
 
   const importCount = mode === "file" ? filePreview.length : validateResult?.found.length ?? 0;
 
@@ -466,75 +491,136 @@ export default function ImportListDialog({
               </label>
 
               {mode === "file" ? (
-                <div className="mt-3 space-y-2">
-                  <div className="grid grid-cols-1 gap-2 xs:grid-cols-2">
-                    <label className="block min-w-0">
-                      <span className="block text-xs font-semibold text-zinc-400">
-                        Name <span className="text-red-300">*</span>
+                <div className="mt-3 space-y-3">
+                  {/* The only fixed column: the players' names. */}
+                  <label className="block min-w-0">
+                    <span className="block text-xs font-semibold text-zinc-400">
+                      Player (name) <span className="text-red-300">*</span>
+                    </span>
+                    <select
+                      value={nameCol}
+                      onChange={(e) => setNameCol(e.target.value)}
+                      className={`${selectCls} mt-1`}
+                    >
+                      {colOptions}
+                    </select>
+                  </label>
+
+                  {/* Every other column is a custom field: a title + its source
+                      column. Values are taken verbatim, shown on the card in order. */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-zinc-400">
+                        Custom fields
                       </span>
-                      <select value={nameCol} onChange={(e) => setNameCol(e.target.value)} className={`${selectCls} mt-1`}>
-                        {colOptions}
-                      </select>
-                    </label>
-                    <label className="block min-w-0">
-                      <span className="block text-xs font-semibold text-zinc-400">Battles</span>
-                      <select value={battlesCol} onChange={(e) => setBattlesCol(e.target.value)} className={`${selectCls} mt-1`}>
-                        {colOptions}
-                      </select>
-                    </label>
-                    <label className="block min-w-0">
-                      <span className="block text-xs font-semibold text-zinc-400">Win rate %</span>
-                      <select value={winrateCol} onChange={(e) => setWinrateCol(e.target.value)} className={`${selectCls} mt-1`}>
-                        {colOptions}
-                      </select>
-                    </label>
-                    <label className="block min-w-0">
-                      <span className="block text-xs font-semibold text-zinc-400">Avg damage</span>
-                      <select value={dmgCol} onChange={(e) => setDmgCol(e.target.value)} className={`${selectCls} mt-1`}>
-                        {colOptions}
-                      </select>
-                    </label>
+                      <span className="text-[10px] text-zinc-500">
+                        titled by you · shown on the card
+                      </span>
+                    </div>
+
+                    {extras.length === 0 && (
+                      <p className="rounded-xl bg-black/20 px-3 py-2 text-[11px] text-zinc-500 ring-1 ring-white/10">
+                        No custom fields yet. Add battles, win rate, or anything you
+                        want — each becomes a titled cell on the player card.
+                      </p>
+                    )}
+
+                    {extras.map((ex) => (
+                      <div key={ex.id} className="grid grid-cols-1 gap-2 xs:grid-cols-2">
+                        <input
+                          value={ex.label}
+                          onChange={(e) =>
+                            setExtras((p) =>
+                              p.map((x) => (x.id === ex.id ? { ...x, label: e.target.value } : x))
+                            )
+                          }
+                          placeholder="Field title (e.g. Battles)"
+                          maxLength={40}
+                          className="w-full min-w-0 rounded-xl bg-black/40 px-3 py-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
+                        />
+                        <div className="flex gap-2">
+                          <select
+                            value={ex.col}
+                            onChange={(e) =>
+                              setExtras((p) =>
+                                p.map((x) => (x.id === ex.id ? { ...x, col: e.target.value } : x))
+                              )
+                            }
+                            className={selectCls}
+                            aria-label="Source column"
+                          >
+                            {colOptions}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setExtras((p) => p.filter((x) => x.id !== ex.id))}
+                            aria-label={`Remove field ${ex.label || ""}`}
+                            className="shrink-0 rounded-xl px-2 py-1 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/15"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {FIELD_PRESETS.filter(
+                        (preset) =>
+                          !extras.some(
+                            (e) => e.label.trim().toLowerCase() === preset.label.toLowerCase()
+                          )
+                      ).map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            const head = headerLabels.map((h) => h.toLowerCase());
+                            const idx = head.findIndex((h) =>
+                              preset.keys.some((k) => h.includes(k))
+                            );
+                            setExtras((p) => [
+                              ...p,
+                              {
+                                id: nextExtraId,
+                                label: preset.label,
+                                col: idx >= 0 ? String(idx) : NONE,
+                              },
+                            ]);
+                            setNextExtraId((n) => n + 1);
+                          }}
+                          className="rounded-lg bg-white/5 px-2.5 py-1 text-xs font-semibold text-zinc-300 ring-1 ring-white/10 transition hover:bg-white/10 hover:text-zinc-100"
+                        >
+                          + {preset.label}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExtras((p) => [...p, { id: nextExtraId, label: "", col: NONE }]);
+                          setNextExtraId((n) => n + 1);
+                        }}
+                        className="rounded-lg bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-200 ring-1 ring-emerald-400/25 transition hover:bg-emerald-500/25"
+                      >
+                        + Custom field
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Extra detail columns -> participant fields. */}
-                  {extras.map((ex) => (
-                    <div key={ex.id} className="grid grid-cols-1 gap-2 xs:grid-cols-2">
-                      <input
-                        value={ex.label}
-                        onChange={(e) =>
-                          setExtras((p) => p.map((x) => (x.id === ex.id ? { ...x, label: e.target.value } : x)))
-                        }
-                        placeholder="Detail label"
-                        className="w-full min-w-0 rounded-xl bg-black/40 px-3 py-2 text-sm text-zinc-100 ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-emerald-400/40"
-                      />
-                      <div className="flex gap-2">
-                        <select
-                          value={ex.col}
-                          onChange={(e) =>
-                            setExtras((p) => p.map((x) => (x.id === ex.id ? { ...x, col: e.target.value } : x)))
-                          }
-                          className={selectCls}
-                        >
-                          {colOptions}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setExtras((p) => p.filter((x) => x.id !== ex.id))}
-                          className="shrink-0 rounded-xl px-2 py-1 text-xs font-bold text-red-200 ring-1 ring-red-400/25 transition hover:bg-red-500/15"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  <button
-                    type="button"
-                    onClick={() => setExtras((p) => [...p, { id: Date.now(), label: "", col: NONE }])}
-                    className="rounded-xl bg-white/5 px-3 py-1.5 text-xs font-bold text-zinc-200 ring-1 ring-white/10 transition hover:bg-white/10"
-                  >
-                    + Add detail column
-                  </button>
+                  {/* Flag is opt-in: only assign a random one when ticked. */}
+                  <label className="flex cursor-pointer items-start gap-2 rounded-xl bg-black/20 px-3 py-2 text-sm text-zinc-200 ring-1 ring-white/10">
+                    <input
+                      type="checkbox"
+                      checked={assignFlag}
+                      onChange={(e) => setAssignFlag(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-500"
+                    />
+                    <span>
+                      Assign a random flag to each card
+                      <span className="mt-0.5 block text-[11px] text-zinc-500">
+                        Leave off for no flag. Every card still gets a random design.
+                      </span>
+                    </span>
+                  </label>
 
                   {filePreview.length > 0 && (
                     <div className="mt-3 space-y-2">
